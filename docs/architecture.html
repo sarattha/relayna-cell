@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Relayna Cell — Architecture guide</title>
+<style>
+:root{color-scheme:light dark;--ink:var(--foreground,light-dark(#202938,#e5eaf2));--sub:var(--muted-foreground,light-dark(#526174,#a7b4c7));--surface:var(--card,light-dark(#f6f8fb,#19212e));--line:var(--border,light-dark(#c8d1dd,#39465b));--paper:var(--background,light-dark(#fff,#101723));--a:var(--chart-1,light-dark(#235bc1,#82aafa));--b:var(--chart-2,light-dark(#7750a1,#c8a0f1));--c:var(--chart-3,light-dark(#157966,#6acdb4));--d:var(--chart-4,light-dark(#9b610a,#e9b866));--rad:var(--radius,12px);--sans:var(--font-sans,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif);--mono:var(--font-mono,ui-monospace,SFMono-Regular,Consolas,monospace)}
+*{box-sizing:border-box}html,body{margin:0;background:transparent}body{font:14px/1.6 var(--sans);color:var(--ink)}#relayna-guide{max-width:1120px;margin:0 auto;padding:0;min-width:0}button,select{font:inherit;color:inherit}button,a,select,summary{-webkit-tap-highlight-color:transparent}button,select{background:var(--surface);border:1px solid var(--line);border-radius:var(--rad);padding:9px 13px;min-height:42px}button{cursor:pointer}button:hover,summary:hover{color:var(--a)}button[aria-selected=true]{color:var(--paper);background:var(--ink);border-color:var(--ink)}button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--a);outline-offset:3px}a{color:var(--a);text-underline-offset:3px}h1,h2,h3,p{margin:0}h2{font-size:24px;line-height:1.25;font-weight:650;letter-spacing:-.5px}h3{font-size:16px;line-height:1.35;font-weight:650}p+p{margin-top:10px}code{font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere}small,.small{font-size:12px}.muted{color:var(--sub)}.eyebrow{font:11px/1.5 var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--sub);margin:4px 0 14px}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:22px}.tabs button{font-size:13px;padding:7px 11px;min-height:38px}.intro{display:grid;gap:8px;margin-bottom:22px}.intro p{max-width:850px;color:var(--sub)}.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.note{background:var(--surface);border-radius:var(--rad);padding:16px}.note h3{margin-bottom:6px}.spacer{margin-top:22px}.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin:12px 0}.legend span:before{content:"";display:inline-block;width:16px;border-top:2px solid var(--ink);margin:0 6px 3px 0}.legend .async:before{border-top-style:dashed}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 18px}.toolbar label{font-weight:600}.toolbar select{max-width:100%}.caption{font-size:13px;color:var(--sub);margin-top:10px}.diagram{margin:4px 0 16px}.diagram-svg{width:100%;height:auto;display:block;max-width:850px;margin:0 auto}.diagram-svg .zone{fill:none;stroke:var(--line);stroke-width:1.1}.diagram-svg .zone-label{font:12px var(--mono);fill:var(--sub);letter-spacing:.2px}.diagram-svg .node{fill:var(--surface);stroke:var(--line);stroke-width:1}.diagram-svg .node-label{font:600 14px var(--sans);fill:var(--ink)}.diagram-svg .node-sub{font:12px var(--sans);fill:var(--sub)}.diagram-svg .route{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linejoin:round}.diagram-svg .async{stroke-dasharray:5 4}.diagram-svg .edge-label{font:11px var(--mono);fill:var(--sub)}.diagram-svg .life{stroke:var(--line);stroke-dasharray:3 5;stroke-width:1}.diagram-svg .seq-label{font:12px var(--sans);fill:var(--ink)}.diagram-svg .label-bg{fill:var(--paper)}.diagram-svg .zone-label.control{fill:var(--a)}.diagram-svg .zone-label.runtime{fill:var(--b)}.diagram-svg .zone-label.audit{fill:var(--c)}.diagram-svg .zone-label.network{fill:var(--d)}.mobile-diagram{display:none}.flow-list{padding:0;margin:0;list-style:none;display:grid;gap:12px}.flow-list li{display:grid;grid-template-columns:28px 1fr;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}.step-no{font:12px var(--mono);color:var(--sub);padding-top:3px}.flow-list strong{display:block;font-weight:600}.flow-list p{color:var(--sub);font-size:13px}.sequence-notes{margin-top:12px}.sequence-notes summary{font-weight:600}.sequence-notes .flow-list{margin-top:18px}.component-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}.component{padding:16px 0;border-bottom:1px solid var(--line);min-width:0}.component summary{cursor:pointer;list-style-position:outside;margin-left:15px;font-weight:650}.component summary small{display:block;color:var(--sub);font-weight:400;margin:3px 0 0}.component dl{margin:14px 0 0;display:grid;grid-template-columns:62px 1fr;gap:7px 10px;font-size:13px}.component dt{color:var(--sub)}.component dd{margin:0;overflow-wrap:anywhere}.table-wrap{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}th{color:var(--sub);font-weight:600}th,td{padding:12px 10px 12px 0;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{font-weight:600}ul{margin:8px 0 0;padding-left:20px}li+li{margin-top:6px}.sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px}.sources div{padding:12px 0;border-bottom:1px solid var(--line)}.sources code{display:block}.sources p{font-size:13px;color:var(--sub)}footer{margin-top:24px;padding:14px 0;border-top:1px solid var(--line);font-size:12px;color:var(--sub)}.sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}[hidden]{display:none!important}
+:root{--line:color-mix(in srgb,var(--ink) 24%,var(--paper));--surface:color-mix(in srgb,var(--card,var(--paper)) 94%,var(--ink))}.diagram-svg .zone-label.control,.diagram-svg .zone-label.runtime,.diagram-svg .zone-label.audit,.diagram-svg .zone-label.network{fill:var(--sub)}
+@media(max-width:600px){h2{font-size:21px}.two,.three,.component-grid,.sources{grid-template-columns:1fr}.tabs{gap:5px}.tabs button{flex:1 0 auto;padding:8px;font-size:12px;min-height:42px}.diagram-svg{display:none}.mobile-diagram{display:block}.intro{margin-bottom:16px}.toolbar{align-items:flex-start;flex-direction:column;gap:6px}.toolbar select{width:100%}.table-wrap th,.table-wrap td{min-width:110px}.component-grid{gap:0}.eyebrow{font-size:10px;letter-spacing:.5px}.note{padding:16px}.sequence-notes{display:none}}
+@media print{body{font-size:11px}.tabs,.toolbar,footer{display:none!important}[role=tabpanel][hidden]{display:block!important}[role=tabpanel]{break-before:page}.diagram-svg{display:block;max-height:650px}.mobile-diagram{display:none}.component-grid,.sources{grid-template-columns:1fr 1fr}details>*{display:block!important}h2,h3{break-after:avoid}.note{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main id="relayna-guide">
+<h1 class="sr-only">Relayna Cell architecture guide</h1>
+<div class="eyebrow">Relayna Cell / implemented MVP / repository snapshot · 7 Nov 2026</div>
+<nav class="tabs" role="tablist" aria-label="Architecture chapters">
+<button type="button" role="tab" id="tab-map" aria-controls="map" aria-selected="true">System map</button>
+<button type="button" role="tab" id="tab-components" aria-controls="components" aria-selected="false">Components</button>
+<button type="button" role="tab" id="tab-flows" aria-controls="flows" aria-selected="false">Execution flows</button>
+<button type="button" role="tab" id="tab-sequences" aria-controls="sequences" aria-selected="false">Sequences</button>
+<button type="button" role="tab" id="tab-enforcement" aria-controls="enforcement" aria-selected="false">Enforcement</button>
+<button type="button" role="tab" id="tab-audit" aria-controls="audit" aria-selected="false">Audit &amp; Grafana</button>
+<button type="button" role="tab" id="tab-operations" aria-controls="operations" aria-selected="false">Lifecycle &amp; API</button>
+<button type="button" role="tab" id="tab-sources" aria-controls="sources" aria-selected="false">Scope &amp; sources</button>
+</nav>
+
+<section id="map" role="tabpanel" aria-labelledby="tab-map">
+<header class="intro"><h2>One Linux VM. Two ways to run an agent.</h2><p>Relayna Cell gives an agent an isolated execution environment, enforces its resource and network policy, and records what ran. The Go core is framework-independent; the first real-model integration uses OpenAI Agents SDK with local Ollama inference.</p></header>
+<div id="system-diagram" class="diagram"></div>
+<div class="two"><article class="note"><h3>The Cell is the workload boundary</h3><p>A Cell owns the gVisor sandbox, temporary workspace, policy and deadline. A session accepts API commands; agent mode starts the entire agent as the workload. Neither receives the Docker or management socket.</p></article><article class="note"><h3>The VM is the trusted host</h3><p>Linux, Docker and the root Cell server administer workloads. Ollama, its gateway and the logging services run outside gVisor in ordinary containers. This is a dedicated, single-operator development VM.</p></article></div>
+<p class="caption">Mac → VM management uses Lima SSH stdio. Browser [G] → Grafana [G] uses Mac loopback :3300 → guest loopback :3000. The VM has no macOS filesystem mounts.</p>
+</section>
+
+<section id="components" role="tabpanel" aria-labelledby="tab-components" hidden>
+<header class="intro"><h2>What each component owns</h2><p>Expand a component for its authority, interfaces and source location. The API, lifecycle manager, observer and egress proxy are internal modules of one Go server process in this MVP.</p></header>
+<div id="component-list" class="component-grid"></div>
+</section>
+
+<section id="flows" role="tabpanel" aria-labelledby="tab-flows" hidden>
+<header class="intro"><h2>Where the agent loop lives</h2><p>The model returns tool calls. The SDK dispatches them. Cell isolates the resulting processes and preserves independent runtime evidence.</p></header>
+<div class="toolbar"><label for="flow-select">Execution mode</label><select id="flow-select"><option value="delegated">Delegated · external agent, Cell tools</option><option value="contained">Contained · entire agent inside Cell</option></select></div>
+<div id="flow-diagram" class="diagram" aria-live="polite"></div>
+<div id="flow-explanation"></div>
+<div class="table-wrap spacer"><table><thead><tr><th>Contract</th><th>Delegated</th><th>Contained</th></tr></thead><tbody>
+<tr><td>Cell mode</td><td><code>session</code>; starts <code>/cell-init idle</code></td><td><code>agent</code>; starts the supplied command</td></tr>
+<tr><td>Agent / tool execution</td><td>SDK outside Cell; shell tool calls Cell’s execution API</td><td>SDK and shell children inside the same Cell</td></tr>
+<tr><td>Model request path in the test</td><td>Trusted runner → gateway → Ollama</td><td>Cell → egress proxy → gateway → Ollama</td></tr>
+<tr><td>Management authority</td><td>Trusted runner receives the local API socket</td><td>Agent receives no management socket</td></tr>
+<tr><td>Audit attribution</td><td>API execution IDs plus separate runtime process identities</td><td>Cell identity plus process identities; child commands need no API execution ID</td></tr>
+<tr><td>Workspace lifetime</td><td>Shared across API commands until Cell exits or is deleted</td><td>Available to the agent and children until Cell exits</td></tr>
+</tbody></table></div>
+<p class="caption">The external SDK test runner is a trusted ordinary Docker container inside the VM, not a process on the Mac. Mac CLI clients use the Lima transport. Neither mode makes the Go core depend on OpenAI Agents SDK.</p>
+</section>
+
+<section id="sequences" role="tabpanel" aria-labelledby="tab-sequences" hidden>
+<header class="intro"><h2>Requests, responses and failure paths</h2><p>Read top to bottom. Vertical lines identify participants, solid arrows show calls or actions, and dashed arrows show responses or asynchronous observations. Spacing is explanatory, not measured latency.</p></header>
+<div class="toolbar"><label for="sequence-select">Scenario</label><select id="sequence-select"><option value="create">Create a Cell</option><option value="delegated">Delegated tool round trip</option><option value="contained">Contained agent round trip</option><option value="network">Approved inference request</option><option value="fault">Audit fault and shutdown</option></select></div>
+<div id="sequence-diagram" class="diagram" aria-live="polite"></div>
+<div id="sequence-note" class="note"></div>
+</section>
+
+<section id="enforcement" role="tabpanel" aria-labelledby="tab-enforcement" hidden>
+<header class="intro"><h2>Policy is enforced outside the workload</h2><p>Admission validates the spec. Docker and gVisor apply the runtime profile. Host firewall rules make the egress proxy the only supported non-loopback path for network-enabled Cells.</p></header>
+<div id="network-diagram" class="diagram"></div>
+<div class="two"><article class="note"><h3>Offline by default</h3><p>No destination grants means <code>network=none</code>. Otherwise each Cell gets an internal IPv4 bridge named <code>rc…</code>. Host INPUT permits TCP :3128 only; other host access and forwarding are dropped. IPv6 host access and forwarding are denied.</p></article><article class="note"><h3>Grant a destination, not arbitrary routing</h3><p>Grants are immutable exact host/port pairs. Private unicast addresses require <code>allow_private</code>; loopback and link-local remain rejected. The proxy validates all resolved addresses and dials a validated IP. CONNECT permits a tunnel; it does not inspect TLS payloads.</p></article></div>
+<h3 class="spacer">Filesystem and resource controls</h3>
+<div class="table-wrap"><table><thead><tr><th>Boundary</th><th>Applied mechanism</th><th>Current contract</th></tr></thead><tbody>
+<tr><td>Identity / privileges</td><td>UID/GID 65532; drop all capabilities; no-new-privileges</td><td>No privileged mode, arbitrary host mounts, port publication or runtime override</td></tr>
+<tr><td>Filesystem</td><td>Read-only root; temporary <code>/workspace</code>; 16 MiB noexec <code>/tmp</code></td><td>Only managed <code>/cell-init</code> is bind-mounted read-only; image-declared volumes are rejected</td></tr>
+<tr><td>Workspace</td><td>Bounded tmpfs plus file-size ulimit</td><td>64 MiB default; 1 MiB to half the Cell memory limit</td></tr>
+<tr><td>CPU</td><td>Docker/cgroup CPU quota</td><td>1 CPU default; 0.1–4 CPUs</td></tr>
+<tr><td>Memory</td><td>Docker memory limit; equal memory+swap limit</td><td>256 MiB default; 64–2048 MiB</td></tr>
+<tr><td>Process count</td><td>Guest <code>RLIMIT_NPROC</code>; host cgroup allows guest limit + 128</td><td>64 default; 8–256. Additional host tasks support gVisor and helpers</td></tr>
+<tr><td>Time</td><td>Cell deadline and API execution timeout</td><td>Cell: 300s default, 1–3600s. API execution: 60s default, 1–300s</td></tr>
+<tr><td>I/O and concurrency</td><td>Output budgets, file transfer bounds and admission limits</td><td>4 MiB per execution output budget and initial workload output budget; files/stdin ≤4 MiB; one active API execution per Cell; at most 8 active Cells</td></tr>
+</tbody></table></div>
+<p class="caption">Process observation is asynchronous auditing, not a synchronous approval gate for every instruction. Shell built-ins and in-process language operations are not individual process-exec events.</p>
+</section>
+
+<section id="audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
+<header class="intro"><h2>Durable evidence first. Dashboards second.</h2><p>SQLite is the authoritative journal. Loki is a queryable projection delivered by Alloy. A successful Grafana query does not establish complete audit coverage.</p></header>
+<div id="audit-diagram" class="diagram"></div>
+<div class="two"><article class="note"><h3>Provenance stays outside workload text</h3><p>The server assigns the event envelope: sequence, event ID, timestamp, Cell ID, optional execution ID, source, event kind and payload. Agent messages stay inside <code>data.text</code>; they cannot replace the producer identity.</p></article><article class="note"><h3>Commit → export → deliver</h3><p>SQLite uses WAL and FULL synchronization. Each event commits before NDJSON export and fsync. Export segments rotate at 8 MiB, within a 256 MiB export budget. Alloy persists positions and retries delivery; duplicates are possible.</p></article></div>
+<h3 class="spacer">How Grafana interprets the projection</h3>
+<div class="table-wrap"><table><thead><tr><th>View</th><th>Purpose and interpretation</th></tr></thead><tbody>
+<tr><td><a href="http://localhost:3300/d/relayna-cell/relayna-cell?from=now-6h&amp;to=now" target="_blank" rel="noopener">Overview</a></td><td>Summary counts, event activity, Cell outcomes, API exit outcomes, proxy decisions, binary/destination rankings and a Cell outcome table</td></tr>
+<tr><td><a href="http://localhost:3300/d/relayna-cell-audit/relayna-cell-investigation" target="_blank" rel="noopener">Investigation</a></td><td>Cell/time-filtered lifecycle, command, runtime and network records; workload output; expandable raw JSON. Cell links preserve investigation context</td></tr>
+<tr><td>Indexed labels</td><td><code>service_name</code>, <code>environment</code>, <code>source</code>. Export filenames are removed</td></tr>
+<tr><td>Structured metadata</td><td><code>cell_id</code>, <code>execution_id</code>, <code>event_id</code>, <code>event_kind</code></td></tr>
+<tr><td>Totals and charts</td><td>Overview headline/category totals deduplicate event IDs; requested Cells use Cell IDs. Activity charts and evidence-source distribution count received records and can include replay duplicates</td></tr>
+<tr><td>Outcomes</td><td>API success means exit code 0, including file helpers. Expected restriction-test failures are included. A Cell’s “exited” lifecycle state does not guarantee exit code 0</td></tr>
+<tr><td>Retention and coverage</td><td>Loki retains seven days. Deleting a Cell keeps journal history. Ingestion delays, replay and retention can make Loki differ from SQLite. Zero gap reports do not prove complete coverage</td></tr>
+</tbody></table></div>
+<p class="caption">CPU/memory utilization and live Cell-state telemetry are not collected by the current logging stack. Environment arrays are stripped from runtime events, but arguments and workload output may still contain sensitive application data.</p>
+</section>
+
+<section id="operations" role="tabpanel" aria-labelledby="tab-operations" hidden>
+<header class="intro"><h2>Cells have a lifetime; audit records outlive them</h2><p>Startup checks the runtime and firewall, removes previously owned runtime resources, and marks previously running/preparing Cells interrupted. A restarted server does not resume workloads through an audit gap.</p></header>
+<div id="lifecycle-diagram" class="diagram"></div>
+<div class="two"><article class="note"><h3>Completion and cancellation</h3><p>The controller waits for exit, drains available output, revokes the proxy grant, records the result and removes runtime resources. Cancelling an API execution stops the entire Cell. Workspace tmpfs disappears with the runtime.</p></article><article class="note"><h3>Audit failure and Loki outage differ</h3><p>A detected trace loss, unexpected active observer disconnect or journal failure stops affected workloads. A Loki outage is downstream: Alloy retries while local journaling continues, until local capacity or another fault prevents safe auditing.</p></article></div>
+<h3 class="spacer">Local API surface · <code>v1alpha1</code></h3>
+<div class="table-wrap"><table><thead><tr><th>Request</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><code>GET /healthz</code></td><td>Journal-health check and API version; not a full end-to-end observability check</td></tr>
+<tr><td><code>POST /v1alpha1/cells</code></td><td>Validate, create and start a Cell</td></tr>
+<tr><td><code>GET /v1alpha1/cells[/{id}]</code></td><td>List Cells or read one Cell’s state</td></tr>
+<tr><td><code>DELETE /v1alpha1/cells/{id}</code></td><td>Stop/delete runtime resources and retain history; preparing Cells reject deletion</td></tr>
+<tr><td><code>POST /v1alpha1/cells/{id}/exec</code></td><td>Run one command; stream NDJSON stdout/stderr/exit/error frames. Byte data is JSON base64</td></tr>
+<tr><td><code>PUT / GET …/cells/{id}/files?path=…</code></td><td>Workspace-relative transfer via cell-init. File bytes are not copied into workload-output audit records; helper executions are recorded</td></tr>
+<tr><td><code>GET /v1alpha1/events</code></td><td>Authoritative journal events; optional <code>cell_id</code> and monotonic <code>after</code> cursor, up to 1,000 per response</td></tr>
+</tbody></table></div>
+<h3 class="spacer">Addresses and persistence</h3>
+<div class="table-wrap"><table><thead><tr><th>Interface / data</th><th>Location</th><th>Access</th></tr></thead><tbody>
+<tr><td>Management API</td><td><code>/run/relayna-cell/api.sock</code></td><td>Root-only Unix stream socket in the VM; Mac access over Lima</td></tr>
+<tr><td>Observer</td><td><code>/run/relayna-cell/observer.sock</code></td><td>Root-only Unix sequenced-packet socket; gVisor SecCheck v1</td></tr>
+<tr><td>Egress proxy</td><td>VM IPv4 TCP <code>:3128</code></td><td>Registered Cell peers and host firewall policy; not forwarded to the Mac</td></tr>
+<tr><td>Inference gateway</td><td>Private Docker frontend IP <code>:8080</code></td><td>Exact private endpoint grant for contained agents; no published host port</td></tr>
+<tr><td>Ollama</td><td>Backend network <code>ollama:11434</code></td><td>Gateway upstream; no published host port; persistent model volume</td></tr>
+<tr><td>Grafana / Loki</td><td>VM loopback <code>:3000 / :3100</code></td><td>Only Grafana forwarded to Mac <code>127.0.0.1:3300</code>; local anonymous Viewer</td></tr>
+<tr><td>Journal / export</td><td><code>/var/lib/relayna-cell/cell.db</code><br><code>/var/lib/relayna-cell/logs/*.ndjson</code></td><td>Stored outside workloads; Alloy reads exports through a read-only mount</td></tr>
+</tbody></table></div>
+<p class="caption">The inference frontend and backend are separate ordinary Docker bridge networks. They have no host-published inference ports; they are not configured as Docker “internal” networks. Cell bridges are internal networks.</p>
+</section>
+
+<section id="sources" role="tabpanel" aria-labelledby="tab-sources" hidden>
+<header class="intro"><h2>Implementation scope and source map</h2><p>This guide describes the repository implementation as of 7 November 2026. It is an explanatory document, not a live status page. No credentials, live API calls or external assets are embedded.</p></header>
+<div class="two"><article class="note"><h3>Implemented now</h3><ul><li>Apple Silicon Mac → Ubuntu 24.04 ARM64 Lima VM: 4 CPUs, 8 GiB RAM, 40 GiB disk</li><li>Docker backend and required gVisor <code>runsc-cell</code> with systrap; no fallback runtime</li><li>Delegated and contained SDK agent tests using local Qwen3 4B Instruct</li><li>Network, filesystem and resource restrictions; process and connection observation</li><li>SQLite journal → Alloy → Loki → two provisioned Grafana dashboards</li></ul></article><article class="note"><h3>Future work, not current architecture</h3><ul><li>Kubernetes backend / evaluation of SIG Agent Sandbox</li><li>Separated privileged node service and remote control plane</li><li>Multi-tenant identity, per-principal authorization and production secret broker</li><li>Persistent workspaces and automatic artifact export</li><li>Automatic audit archival, ingestion-lag alerting and resource utilization telemetry</li></ul></article></div>
+<h3 class="spacer">Pinned versions in this snapshot</h3>
+<p class="small spacer"><code>gVisor release-20261102.0</code> · <code>OpenAI Agents SDK 0.24.0</code> · <code>Ollama 0.40.15</code> · <code>Loki 3.7.9</code> · <code>Alloy 1.21.3</code> · <code>Grafana 13.3.0</code>. These are repository pins, not a claim about the latest upstream releases.</p>
+<h3 class="spacer">Where to verify each decision</h3><div id="source-list" class="sources"></div>
+<h3 class="spacer">Verification entry points</h3><div class="table-wrap"><table><thead><tr><th>Command</th><th>What it checks</th></tr></thead><tbody>
+<tr><td><code>make test</code></td><td>Go tests, race detector and vet</td></tr>
+<tr><td><code>make smoke</code></td><td>Real Linux VM, gVisor evidence, restriction behavior, retained history and Loki outage recovery; deterministic inference fixture</td></tr>
+<tr><td><code>make model-smoke</code></td><td>Real Ollama + SDK, both execution modes, generated Python and independent correctness assertions</td></tr>
+<tr><td><code>make dashboards-check</code></td><td>Dashboard generator consistency, live LogQL queries and aggregate reconciliation against raw Loki records</td></tr>
+</tbody></table></div>
+</section>
+<footer>Source-based architecture reference. The diagrams simplify concurrent implementation details; the sequence notes describe ordering and failure limits. This file works offline. Grafana links work when the local VM and logging stack are running.</footer>
+<noscript><p>This guide uses local JavaScript to draw diagrams and switch chapters. Enable JavaScript to explore it; no network requests are required.</p></noscript>
+</main>
+<script>
+(()=>{
+'use strict';
+const root=document.getElementById('relayna-guide');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const svgText=(x,y,text,cls='node-label',anchor='middle')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${anchor}">${esc(text)}</text>`;
+let diagramCount=0;
+function node(x,y,w,h,title,sub=[]){return `<rect class="node" x="${x}" y="${y}" width="${w}" height="${h}" rx="8"/>`+svgText(x+w/2,y+(sub.length?25:h/2+5),title)+sub.map((t,i)=>svgText(x+w/2,y+46+i*17,t,'node-sub')).join('')}
+function zone(x,y,w,h,label,kind=''){return `<rect class="zone" x="${x}" y="${y}" width="${w}" height="${h}" rx="12"/>`+svgText(x+14,y+23,label,'zone-label '+kind,'start')}
+function line(points,label='',lx=0,ly=0,async=false){return {points,label,lx,ly,async}}
+function edges(list,id){return list.map(e=>`<polyline class="route ${e.async?'async':''}" points="${e.points}" marker-end="url(#${id})"/>`+(e.label?`<rect class="label-bg" x="${e.lx-(e.label.length*6.3+10)/2}" y="${e.ly-12}" width="${e.label.length*6.3+10}" height="16"/>`+svgText(e.lx,e.ly,e.label,'edge-label'):'')).join('')}
+function listHTML(items){return '<ol class="flow-list">'+items.map((s,i)=>`<li><span class="step-no">${String(i+1).padStart(2,'0')}</span><div><strong>${esc(s[0])}</strong><p>${esc(s[1])}</p></div></li>`).join('')+'</ol>'}
+function diagram(el,{title,height,body,routes=[],steps,caption=''}){
+ const id='arrow-'+(++diagramCount);
+ root.querySelector('#'+el).innerHTML=`<svg class="diagram-svg" viewBox="0 0 720 ${height}" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><desc>${esc(steps.map(s=>s.join(': ')).join('. '))}</desc><defs><marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L8 5L1 9" fill="none" stroke="var(--ink)" stroke-width="1.3"/></marker></defs>${body}${edges(routes,id)}</svg><div class="mobile-diagram">${listHTML(steps)}</div>${caption?'<p class="caption">'+esc(caption)+'</p>':''}`;
+}
+
+diagram('system-diagram',{
+ title:'Mac host, dedicated Linux VM, Cell runtime, inference and audit services',height:810,
+ body:zone(8,8,704,112,'macOS · trusted operator')+node(28,48,300,50,'CLI / Go client',['Lima SSH transport'])+node(398,48,294,50,'Browser [G]',['localhost:3300'])+
+ zone(8,166,704,630,'Lima relayna-cell · Ubuntu ARM64')+
+ zone(28,222,300,138,'cell-server · root in the VM','control')+svgText(178,276,'Local API · admission · lifecycle')+svgText(178,302,'Observer · egress proxy · audit store','node-sub')+svgText(178,328,'One Go process, separate modules','node-sub')+
+ node(398,222,294,70,'Docker backend',['Required runtime: runsc-cell'])+
+ zone(398,356,294,188,'Cell · gVisor workload boundary','runtime')+node(414,401,262,65,'Session tools or contained agent',['UID 65532 · bounded resources'])+node(414,486,262,42,'Ephemeral /workspace')+
+ node(28,422,300,67,'SQLite + NDJSON export',['Authoritative journal → fsynced files'])+
+ node(398,598,294,78,'Shared local inference',['Gateway :8080 → Ollama :11434','Outside gVisor; no host ports'])+
+ zone(28,594,300,184,'Observability','audit')+node(42,637,80,48,'Alloy')+node(141,637,72,48,'Loki')+node(232,637,78,48,'Grafana')+svgText(270,711,'[G]','node-sub')+svgText(178,747,'Logs and dashboards persist outside Cells','node-sub'),
+ routes:[line('178,98 178,136 346,136 346,202 178,202 178,222','SSH → API socket',256,124),line('328,260 398,260','Docker',362,248),line('545,292 545,356','runsc',576,328),line('398,420 354,420 354,326 328,326','trace',375,402,true),line('178,360 178,422','commit / fsync',178,396),line('545,544 545,598','via proxy :3128',611,576),line('178,489 178,620 82,620 82,637','export',178,530),line('122,662 141,662'),line('213,662 232,662')],
+ steps:[['Mac → Linux VM','CLI/Go client carries HTTP over Lima SSH to the root-only API socket. The browser reaches Grafana through loopback port forwarding.'],['Cell server → Docker → gVisor','The root Go process validates policy and creates a restricted workload through Docker. Required runsc-cell is configured with SecCheck before startup.'],['Workload inside Cell','Session tools or the complete agent run as UID 65532 with a temporary workspace, resource limits and no management sockets.'],['Cell → approved inference','For contained inference, the workload crosses the egress proxy to the private gateway, then Ollama. Inference remains outside gVisor.'],['Runtime / control → journal','SecCheck, lifecycle and proxy events join workload-output envelopes in SQLite and fsynced NDJSON files.'],['Export → Alloy → Loki → Grafana','Alloy reads only the exported files. Loki stores the projection; Grafana presents it through the forwarded browser endpoint.']]
+});
+
+const components=[
+['Mac CLI / Go client','Trusted operator interface','Mac','Create/list/exec/files/events through Lima SSH stdio; no TCP management endpoint.','pkg/client/lima.go · cmd/cell/main.go','VM operator authority through sudo'],
+['Cell server / API','Local root-only control plane','VM systemd service','HTTP over api.sock; bounded request decoding, v1alpha1 routes and NDJSON execution frames.','cmd/cell-server/main.go · internal/api/server.go','Root; owns the local management socket'],
+['Lifecycle manager','Cell state, deadlines and cleanup','Inside cell-server','Admission limits, runtime preparation, one active API execution per Cell, grant revocation and restart reconciliation.','internal/engine/manager.go','Can stop or remove owned runtime resources'],
+['Docker adapter','Translate policy into runtime configuration','Inside cell-server','Pulls/inspects images as trusted infrastructure; applies runsc-cell, user, mounts, tmpfs, cgroups and limits. Rejects image-declared volumes.','internal/runtime/docker.go','Owns Docker socket; cannot be called directly by a workload'],
+['gVisor / runsc-cell','Sandbox kernel and runtime evidence','VM runtime per Cell','systrap platform; SecCheck profile starts with the workload. Receives container operations from Docker.','scripts/install-runtime.sh · deploy/runtime/pod-init.json','Part of the trusted isolation boundary'],
+['cell-init / workload','Bounded execution and workspace helper','Inside Cell','Session idle/reaping; rooted file reads/writes through os.OpenRoot. Agent mode starts the supplied program directly.','cmd/cell-init/main.go','UID/GID 65532; no control-plane access'],
+['SecCheck observer','Decode independent process observations','Inside cell-server','Root-only Unix sequenced packets; protocol v1 handshake; process/start/exec/clone/exit and configured syscall evidence. Strips environment arrays.','internal/observer/observer.go','Checks stream identity, truncation and drop counts; signals faults'],
+['Egress proxy + firewall','Destination policy and direct-route restrictions','VM host / cell-server','Identifies peers by registered Cell IP; exact host/port match; validates DNS results; records allow before dialing; supports HTTP/CONNECT.','internal/network/proxy.go · scripts/network-guard.sh','Trusted network enforcement outside the workload'],
+['Audit store','Authoritative events and Cell state','Persistent VM disk','SQLite transaction/sequence then NDJSON export and fsync. Stable event IDs support replay and deduplication.','internal/audit/store.go','Write failures prevent further safe work; independent of Loki'],
+['OpenAI Agents SDK','Agent loop and shell tool adapter','External runner OR inside Cell','Chat Completions through AsyncOpenAI; serial tool dispatch, bounded output/turns/time, independent generated-code checks. Tracing export disabled.','examples/agents-sdk/agent.py','External runner is trusted; contained SDK is a workload'],
+['Inference gateway','Expose only the inference operation','Ordinary Nginx container','POST /v1/chat/completions plus /healthz. Other paths are denied; Authorization stripped. Frontend/backend bridge attachment; no host-published port.','deploy/inference/nginx.conf · deploy/inference/compose.yaml','Does not expose model pull/delete APIs to agents'],
+['Ollama / Qwen3','Shared local model execution','Ordinary VM container','Qwen3 4B Instruct for tests; persistent model volume; 2 CPUs / 4 GiB configured; one loaded model and one parallel request; cloud disabled.','deploy/inference/compose.yaml · scripts/inference-up.sh','Outside gVisor and separate from Cell resource limits'],
+['Grafana Alloy','Collect and forward audit exports','Observability Docker network','Read-only NDJSON mount; outer-envelope parsing, timestamp, bounded labels, structured metadata; persisted file positions and retry.','deploy/observability/config.alloy','No Docker socket; does not trust nested workload JSON'],
+['Loki','Queryable event projection','Observability Docker network','Structured metadata and seven-day retention on persistent storage; ingestion can lag or replay.','deploy/observability/loki.yaml','Secondary projection; not the authoritative journal'],
+['Grafana','Overview and Cell investigation','Observability Docker network','Provisioned Loki datasource; charts, totals, readable records and raw JSON; anonymous local Viewer. Only this service is forwarded to the Mac.','scripts/build-dashboards.py · deploy/observability/grafana/','Reads logs; no authority to create or execute Cells']
+];
+root.querySelector('#component-list').innerHTML=components.map(c=>`<details class="component"><summary>${esc(c[0])}<small>${esc(c[1])}</small></summary><dl><dt>Where</dt><dd>${esc(c[2])}</dd><dt>Role / I/O</dt><dd>${esc(c[3])}</dd><dt>Authority</dt><dd>${esc(c[5])}</dd><dt>Source</dt><dd><code>${esc(c[4])}</code></dd></dl></details>`).join('');
+
+const flows={
+ delegated:{title:'External SDK delegates shell execution to a session Cell',height:385,
+ body:node(18,32,200,76,'External SDK runner',['Trusted; outside gVisor'])+node(268,32,184,76,'Inference gateway',['Chat Completions only'])+node(506,32,196,76,'Ollama / Qwen3',['Local model'])+node(18,222,200,76,'Cell execution API',['Root-only Unix socket'])+node(268,222,184,76,'Session Cell',['/cell-init idle + tools'])+node(506,222,196,76,'Workspace',['/workspace/add.py']),
+ routes:[line('218,70 268,70','infer',243,56),line('452,70 506,70'),line('118,108 118,222','tool → exec',178,166),line('218,260 268,260','exec',243,246),line('452,260 506,260','write',479,246)],
+ steps:[['SDK → local model','The trusted external runner calls the gateway/Ollama directly over the inference frontend network.'],['Model → SDK tool request','The SDK receives a shell tool call and dispatches it through the Cell API; it never runs model-generated shell on the trusted runner.'],['API → session Cell','The manager records execution.requested, invokes Docker exec in gVisor, and journals and returns output and exit status.'],['Cell → workspace','Generated files remain inside the bounded Cell workspace. Subsequent API executions share it.'],['Results → SDK → model','Tool results feed the next agent turn. The test then verifies generated Python independently and cleans up the Cell.']],
+ explanation:'<div class="two"><article class="note"><h3>Tool execution is the isolation boundary</h3><p>The SDK’s shell function posts to <code>/cells/{id}/exec</code>. The trusted runner receives the management socket, while the session Cell has no endpoint grant in this model test.</p></article><article class="note"><h3>Keep provenance separate</h3><p>SDK orchestration messages print to the external test console. Cell journals API commands/output and runtime observations. Those records do not claim that the external SDK loop itself ran in Cell.</p></article></div>'},
+ contained:{title:'Contained SDK agent runs tools locally and infers through the approved proxy route',height:470,
+ body:zone(18,20,684,180,'Inside one Cell · untrusted workload','runtime')+node(36,77,194,78,'SDK agent',['Owns the agent loop'])+node(278,77,176,78,'Shell / Python',['Child processes'])+node(504,77,180,78,'Workspace',['Bounded tmpfs'])+node(36,318,194,78,'Egress proxy',['VM host :3128'])+node(278,318,176,78,'Gateway',['Private IP :8080'])+node(504,318,180,78,'Ollama',['Backend :11434']),
+ routes:[line('230,116 278,116','tool',254,102),line('454,116 504,116','files',479,102),line('133,155 133,318','approved inference',228,266),line('230,357 278,357'),line('454,357 504,357')],
+ steps:[['API → start contained agent','Create an agent-mode Cell whose command launches the SDK. The root controller starts it with tracing already configured.'],['SDK → proxy → gateway → Ollama','The Cell has one exact private gateway grant. Host firewall rules require proxy use. The model service stays outside gVisor.'],['SDK → local shell → workspace','The SDK runs shell subprocesses inside its existing Cell, without calling the Cell management API.'],['Runtime → observer','SecCheck independently records process transitions. Agent tool messages remain self-reported workload output.'],['Agent exits → cleanup','The initial workload ends, output is drained, the grant is revoked, and runtime/workspace resources are removed.']],
+ explanation:'<div class="two"><article class="note"><h3>The whole loop is isolated</h3><p>The SDK, its tool dispatch and the tool subprocesses share one Cell. The shell adapter checks UID 65532 and the presence of <code>/cell-init</code> before running local subprocesses.</p></article><article class="note"><h3>Inference is shared infrastructure</h3><p>Granting the gateway permits Chat Completions, not Ollama administration. SDK tracing export and Ollama cloud features are disabled for the local test.</p></article></div>'}
+};
+function renderFlow(){const f=flows[root.querySelector('#flow-select').value];diagram('flow-diagram',f);root.querySelector('#flow-explanation').innerHTML=f.explanation}
+root.querySelector('#flow-select').addEventListener('change',renderFlow);renderFlow();
+
+const sequences={
+ create:{actors:['Client','Cell server','Journal','Docker / runsc','Cell workload'],steps:[
+ [0,1,'Create Cell','Submit the image, mode, resources, deadline and exact endpoint grants.'],
+ [1,1,'Validate + admit','Apply defaults, reject unsupported values, check journal health and the active-Cell limit.'],
+ [1,2,'Save + requested','Persist preparing state and cell.requested before runtime preparation.'],
+ [1,3,'Prepare runtime','Check runtime/firewall; inspect or pull the image; create the restricted network and container.'],
+ [3,1,'Container identity','Return the container identity and any private Cell IP; register it before runtime start.',true],
+ [1,2,'Prepared event','Register any proxy grant, then record cell.prepared.'],
+ [1,3,'Start','Start with the required runsc-cell SecCheck configuration already in place.'],
+ [3,4,'Launch workload','Start cell-init idle for a session or the supplied command for agent mode.'],
+ [1,0,'Cell response','Persist running state and return the Cell object. A watcher tracks output, exit and the deadline.',true]
+ ],note:'The observer listener exists before the API accepts requests. SecCheck setup failures are not ignored. Runtime events can arrive concurrently with startup; the diagram shows control flow, not a global total order across all producers.'},
+ delegated:{actors:['External SDK','Local inference','Cell API','gVisor Cell','Journal'],steps:[
+ [0,1,'Ask model','The trusted external runner sends a Chat Completions request to the local inference gateway.'],
+ [1,0,'Tool call','The model returns a shell command as a tool request.',true],
+ [0,2,'POST exec','The SDK tool adapter submits the command through the Unix management API.'],
+ [2,4,'Record request','Record execution.requested with a new API execution ID.'],
+ [2,3,'Docker exec','Execute /bin/sh -c inside the existing session Cell as UID 65532.'],
+ [3,2,'stdout / stderr','Runtime output is delivered to the controller. SecCheck evidence follows its separate observer path.',true],
+ [2,4,'Output + result','Journal bounded output chunks and execution.finished, or execution.failed on an execution error.'],
+ [2,0,'NDJSON frames','Return output frames and the exit code to the SDK tool adapter.',true],
+ [0,1,'Continue turn','Send tool results back to the model. Repeat within the test’s tool/turn/time limits.']
+ ],note:'Only one API execution is active in a Cell at a time. File-transfer helpers also count as API executions. Cancelling an API execution stops the whole Cell, rather than leaving an uncertain child process running.'},
+ contained:{actors:['SDK in Cell','Proxy','Gateway','Ollama','Shell in Cell'],steps:[
+ [0,1,'Model request','The contained SDK uses its proxy environment to reach the approved private inference endpoint.'],
+ [1,2,'Authorized forward','Check the peer grant, exact endpoint and resolved IP; journal network.allow before opening the upstream connection.'],
+ [2,3,'POST completions','Gateway permits only the Chat Completions route and strips Authorization.'],
+ [3,2,'Tool-call response','The model returns a shell tool request.',true],
+ [2,1,'Response','The gateway relays the model response.',true],
+ [1,0,'Response','The proxy relays the response to the SDK inside Cell.',true],
+ [0,4,'Run shell child','The tool adapter starts /bin/sh -c locally inside the same Cell.'],
+ [4,0,'Tool result','Return bounded stdout/stderr and exit code to the SDK.',true],
+ [0,1,'Next model turn','Send tool results through the same approved inference route.'],
+ [0,0,'Finish / verify','The demo independently tests generated code, prints result events and exits.']
+ ],note:'The contained agent never receives the management socket. Child-tool causality is visible in SDK output as a workload claim; runtime process identity is independently observed. The core does not invent API execution IDs for arbitrary child processes.'},
+ network:{actors:['Workload','Egress proxy','Journal','Gateway','Ollama'],steps:[
+ [0,1,'HTTP request','A network-enabled Cell requests the private gateway host:8080. Direct forwarding is blocked by the host firewall.'],
+ [1,1,'Match grant','Identify the registered source IP and require an exact allowed host/port.'],
+ [1,1,'Resolve + validate','Validate DNS answers against public/private rules and retain the resolved IP used for dialing.'],
+ [1,2,'network.allow','Commit the authorization evidence. If journaling fails, return 503 instead of dialing.'],
+ [1,3,'Dial pinned IP','Open the approved connection to the gateway. Authorization does not prove upstream success.'],
+ [3,4,'Chat Completions','Gateway accepts POST /v1/chat/completions; model-management routes are blocked.'],
+ [4,3,'Model response','Return the local model response.',true],
+ [3,1,'Gateway response','Forward the response through the proxy.',true],
+ [1,0,'Workload response','Deliver the response to the original Cell client.',true]
+ ],note:'A destination mismatch or restricted DNS result records network.deny and returns 403. DNS errors record network.error. CONNECT authorizes a tunnel to a destination; it does not impose the gateway’s HTTP path rules on arbitrary TLS services.'},
+ fault:{actors:['SecCheck','Observer','Manager','Runtime','Journal'],steps:[
+ [0,1,'Drop / disconnect','A packet reports dropped events, decoding fails, or the observer connection closes unexpectedly.',true],
+ [1,2,'Report fault','For a disconnect, allow a short normal-exit grace period and check whether the container is still active.'],
+ [2,4,'Failed + audit.gap','Mark the affected Cell failed and attempt to persist the audit-gap report. An unidentified/global fault can affect all active Cells.'],
+ [2,3,'Cancel + kill','Cancel the Cell context and kill the runtime so work cannot knowingly continue without observation.'],
+ [3,2,'Exit + output drain','The watcher observes exit and drains available output within its bounded cleanup behavior.',true],
+ [2,4,'Finish evidence','Revoke access and attempt to persist the terminal result. A broken journal can prevent these records from being written.'],
+ [2,3,'Remove resources','Remove the owned container/network; retain committed audit history.']
+ ],note:'Detection and shutdown are asynchronous: this is not proof that no operation occurred before the stop. A downstream Loki outage alone follows a different path: local journaling continues and Alloy retries until local capacity or another fault blocks auditing.'}
+};
+function renderSequence(){
+ const key=root.querySelector('#sequence-select').value,s=sequences[key],id='seq-'+(++diagramCount),height=105+s.steps.length*58,positions=s.actors.map((_,i)=>60+i*150);
+ let body=s.actors.map((a,i)=>`<line class="life" x1="${positions[i]}" y1="58" x2="${positions[i]}" y2="${height-20}"/>`+node(positions[i]-54,8,108,46,a)).join('');
+ s.steps.forEach((st,i)=>{let x1=positions[st[0]],x2=positions[st[1]],y=90+i*58,points=x1===x2?`${x1},${y} ${x1+34},${y} ${x1+34},${y+16} ${x1},${y+16}`:`${x1},${y} ${x2},${y}`;const label=`${i+1}. ${st[2]}`,cx=x1===x2?x1+32:(x1+x2)/2,w=Math.min(214,label.length*6.1+10);body+=`<polyline class="route ${st[4]?'async':''}" points="${points}" marker-end="url(#${id})"/><rect class="label-bg" x="${Math.max(2,Math.min(718-w,cx-w/2))}" y="${y-22}" width="${w}" height="18"/>`+svgText(Math.max(w/2+2,Math.min(718-w/2,cx)),y-9,label,'seq-label')});
+ const details=s.steps.map(st=>[`${s.actors[st[0]]} → ${s.actors[st[1]]}: ${st[2]}`,st[3]]);
+ root.querySelector('#sequence-diagram').innerHTML=`<svg class="diagram-svg" viewBox="0 0 720 ${height}" role="img" aria-label="${esc(root.querySelector('#sequence-select').selectedOptions[0].textContent)}"><title>${esc(root.querySelector('#sequence-select').selectedOptions[0].textContent)}</title><desc>${esc(details.map(x=>x.join('. ')).join('. '))}</desc><defs><marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L8 5L1 9" fill="none" stroke="var(--ink)" stroke-width="1.3"/></marker></defs>${body}</svg><div class="mobile-diagram">${listHTML(details)}</div><details class="sequence-notes"><summary>Read the ${details.length} steps in detail</summary>${listHTML(details)}</details>`;
+ root.querySelector('#sequence-note').innerHTML='<h3>Ordering and limits</h3><p>'+esc(s.note)+'</p>';
+}
+root.querySelector('#sequence-select').addEventListener('change',renderSequence);renderSequence();
+
+diagram('network-diagram',{title:'Egress authorization decision flow and rejection paths',height:550,
+ body:node(24,18,380,65,'Request reaches egress proxy',['Registered Cell source IP required'])+node(24,128,380,65,'Grant and DNS answers accepted?',['Exact host:port; validate resolved addresses'])+node(480,128,216,65,'Reject request',['403 deny / 502 DNS error'])+node(24,242,380,65,'Journal network.allow',['Persist before connecting'])+node(480,242,216,65,'Audit unavailable',['503 · do not dial'])+node(24,356,380,65,'Dial validated IP',['HTTP forward or CONNECT tunnel'])+node(480,356,216,65,'Upstream unavailable',['502 · allow ≠ success'])+node(24,470,380,60,'Relay response / tunnel'),
+ routes:[line('214,83 214,128'),line('404,160 480,160','no',442,147),line('214,193 214,242','yes',235,224),line('404,275 480,275','fails',442,262),line('214,307 214,356'),line('404,389 480,389','fails',442,376),line('214,421 214,470')],
+ steps:[['Cell peer → proxy','Unknown peers are rejected. An offline Cell has no external network route. A connected Cell can reach only the proxy through its host firewall boundary.'],['Check grant + DNS','Match immutable exact host/port grants, resolve once and validate the addresses. Mismatch/restricted address: deny 403. DNS failure: error 502.'],['Journal the allow decision','Persist network.allow before dialing. If the journal is unavailable, return 503 and do not open the upstream connection.'],['Dial the validated IP','An upstream connection failure can still return 502 after an allow event; allow is authorization, not completion.'],['Relay the response','Forward HTTP or establish the approved CONNECT tunnel. No TLS payload inspection is claimed.']]
+});
+
+diagram('audit-diagram',{title:'Four audit producers, authoritative journal and downstream Grafana projection',height:550,
+ body:node(16,24,158,80,'Control',['Lifecycle / API'])+node(192,24,158,80,'Runtime',['SecCheck evidence'])+node(368,24,158,80,'Network',['Proxy decisions'])+node(544,24,158,80,'Workload',['Untrusted text'])+node(18,228,200,76,'SQLite journal',['Commit first'])+node(260,228,200,76,'NDJSON export',['Then append + fsync'])+node(502,228,200,76,'Grafana Alloy',['Tail + parse envelope'])+node(502,398,200,76,'Loki',['Queryable projection'])+node(260,398,200,76,'Grafana',['Charts + readable logs'])+node(18,398,200,76,'Investigation',['Cell ID + time filter']),
+ routes:[line('95,104 95,174 118,174 118,228'),line('271,104 271,174 118,174 118,228'),line('447,104 447,174 118,174 118,228'),line('623,104 623,174 118,174 118,228'),line('218,267 260,267'),line('460,267 502,267'),line('602,304 602,398','retry / deliver',602,359,true),line('502,436 460,436'),line('260,436 218,436')],
+ steps:[['Four producers → trusted envelope','Control, runtime and network events are produced outside the workload. Workload stdout/stderr is wrapped with trusted provenance but its content remains an application claim.'],['SQLite commit','Assign a stable event ID and monotonic journal sequence; commit the authoritative event before exporting it.'],['NDJSON append + fsync','Write outside the sandbox to rotated export files. Export failure preserves the committed event but stops further safe work.'],['Alloy → Loki','Tail read-only exports, parse the outer envelope, preserve metadata and retry ingestion. Delivery is not exactly-once.'],['Loki → Grafana','Query received historical records. Counts are scoped by time and Cell; charts are not live-state or CPU/memory telemetry.'],['Overview → investigation','A Cell outcome link carries the selected Cell ID and time range into readable records and raw event envelopes.']]
+});
+
+diagram('lifecycle-diagram',{title:'Cell lifecycle states and cleanup transitions',height:390,
+ body:node(18,24,190,60,'preparing')+node(268,24,190,60,'running')+node(518,24,184,60,'exited')+node(268,184,190,60,'failed')+node(518,184,184,60,'deleted')+node(18,298,190,60,'interrupted'),
+ routes:[line('208,54 268,54','start',238,41),line('458,54 518,54','exit',488,41),line('363,84 363,184','fault / timeout',363,141),line('112,84 112,214 268,214','prepare fails',180,202),line('610,84 610,184','delete',638,141),line('458,214 518,214','delete',488,201),line('458,70 486,70 486,167 550,167 550,184','delete',486,130),line('268,70 242,70 242,328 208,328','restart / shutdown',242,282)],
+ steps:[['preparing → running','After validation, journal the request, prepare runtime resources, register identity/grants and start the workload. Preparation failure can end in failed without a cell.finished event.'],['running → exited','The initial workload exits. The state can be exited even when its process exit code is non-zero.'],['running → failed','A deadline, audit fault, execution cancellation or runtime/output error can fail the Cell and stop its workload.'],['running / ended → deleted','Explicit deletion stops the workload and removes runtime resources. The journal is retained. Preparing Cells reject deletion.'],['active → interrupted on restart/shutdown','On restart, previously owned resources are removed and previously active Cells are recorded as interrupted. Workloads are not resumed.']],
+ caption:'Simplified state transitions. Terminal states describe lifecycle, not audit completeness or a successful process exit. Runtime cleanup failure can change an outcome to failed.'
+});
+
+const sources=[
+['docs/architecture.md · README.md','Accepted MVP decisions, operation commands and boundaries.'],
+['pkg/cell/types.go','Public Cell/Exec/Event contract, default values and accepted limits.'],
+['pkg/client/lima.go · internal/api/server.go','Mac transport, API routes, execution framing and file helpers.'],
+['cmd/cell-server/main.go · internal/engine/manager.go','Server assembly, startup, lifecycle, execution, faults and cleanup.'],
+['internal/runtime/docker.go · cmd/cell-init/main.go','Applied Docker profile and bounded workspace access.'],
+['internal/network/proxy.go · scripts/network-guard.sh','Peer grants, destination/DNS validation, audit-before-dial and firewall rules.'],
+['internal/observer/observer.go · deploy/runtime/pod-init.json','SecCheck decoding, configured events, drop/disconnect detection.'],
+['internal/audit/store.go · scripts/replay-audit.py','Authoritative persistence, export budgets and replay.'],
+['deploy/lima/cell.yaml · scripts/install-runtime.sh','VM shape, no Mac mounts, port forwarding and runtime pin.'],
+['deploy/inference/compose.yaml · deploy/inference/nginx.conf','Ollama isolation from workload runtime, gateway routes and network attachments.'],
+['examples/agents-sdk/agent.py · scripts/model-smoke.py','Both SDK modes, model-generated tools and independent verification.'],
+['deploy/observability/config.alloy · deploy/observability/loki.yaml','Envelope processing, label/metadata split and retention.'],
+['deploy/observability/compose.yaml · scripts/build-dashboards.py','Logging-service pins, exposure and provisioned dashboard semantics.'],
+['scripts/smoke.py · scripts/check-dashboards.py','Enforcement integration checks and raw-event dashboard reconciliation.']
+];
+root.querySelector('#source-list').innerHTML=sources.map(([path,note])=>`<div><code>${esc(path)}</code><p>${esc(note)}</p></div>`).join('');
+const tabs=[...root.querySelectorAll('[role=tab]')];
+function activate(id,updateHash=false){if(!tabs.some(t=>t.getAttribute('aria-controls')===id))id='map';tabs.forEach(t=>{const selected=t.getAttribute('aria-controls')===id;t.setAttribute('aria-selected',String(selected));root.querySelector('#'+t.getAttribute('aria-controls')).hidden=!selected});if(updateHash){try{history.replaceState(null,'','#'+id)}catch{}}}
+tabs.forEach((tab,i)=>{tab.addEventListener('click',()=>activate(tab.getAttribute('aria-controls'),true));tab.addEventListener('keydown',e=>{let j;if(e.key==='ArrowRight')j=(i+1)%tabs.length;if(e.key==='ArrowLeft')j=(i+tabs.length-1)%tabs.length;if(e.key==='Home')j=0;if(e.key==='End')j=tabs.length-1;if(j!==undefined){e.preventDefault();tabs[j].focus();tabs[j].click()}})});
+window.addEventListener('hashchange',()=>activate(location.hash.slice(1)));activate(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>

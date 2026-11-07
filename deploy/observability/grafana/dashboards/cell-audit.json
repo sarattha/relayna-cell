@@ -1,0 +1,912 @@
+{
+  "uid": "relayna-cell-audit",
+  "title": "Relayna Cell \u00b7 Investigation",
+  "description": "Inspect a Cell using the shared Cell ID and time filters. Readable logs retain expandable original fields; raw JSON is available in the collapsed final section.",
+  "schemaVersion": 41,
+  "version": 2,
+  "editable": false,
+  "tags": [
+    "relayna-cell"
+  ],
+  "refresh": "15s",
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "15s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "links": [
+    {
+      "title": "Overview",
+      "type": "link",
+      "url": "/d/relayna-cell/relayna-cell",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard"
+    },
+    {
+      "title": "Investigate a Cell",
+      "type": "link",
+      "url": "/d/relayna-cell-audit/relayna-cell-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "cell_id",
+        "type": "textbox",
+        "label": "Cell ID (regex)",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        },
+        "query": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "API executions",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "For the selected time range and Cell filter. Counts reflect events received by Loki, not current live state. Finished or failed API executions, including workspace helpers.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (event_id) (count_over_time({service_name=\"relayna-cell\",source=\"control\"} | cell_id=~\"${cell_id:raw}\" | event_kind=~\"execution.finished|execution.failed\" | __error__=\"\" [$__range]))) or vector(0)",
+          "queryType": "instant",
+          "legendFormat": "API executions",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#008a8a"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 2,
+      "title": "Process exec events",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "For the selected time range and Cell filter. Counts reflect events received by Loki, not current live state.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (event_id) (count_over_time({service_name=\"relayna-cell\",source=\"runtime\"} | cell_id=~\"${cell_id:raw}\" | event_kind=\"process.exec\" | __error__=\"\" [$__range]))) or vector(0)",
+          "queryType": "instant",
+          "legendFormat": "Process exec events",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "title": "Network denials",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "For the selected time range and Cell filter. Counts reflect events received by Loki, not current live state.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (event_id) (count_over_time({service_name=\"relayna-cell\",source=\"network\"} | cell_id=~\"${cell_id:raw}\" | event_kind=\"network.deny\" | __error__=\"\" [$__range]))) or vector(0)",
+          "queryType": "instant",
+          "legendFormat": "Network denials",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "Workload log records",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Journal output chunks, not lines, tool calls or tokens.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (event_id) (count_over_time({service_name=\"relayna-cell\",source=\"workload\"} | cell_id=~\"${cell_id:raw}\" | event_kind=\"output\" | __error__=\"\" [$__range]))) or vector(0)",
+          "queryType": "instant",
+          "legendFormat": "Workload log records",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 10,
+      "title": "Cell activity",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 16,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Events in each displayed interval; the interval adapts to the time range. Missing buckets indicate no matching records, not a service-health guarantee.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source)(count_over_time({service_name=\"relayna-cell\"} | cell_id=~\"${cell_id:raw}\" | __error__=\"\" | keep source [$__interval]))",
+          "queryType": "range",
+          "legendFormat": "{{source}}",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014",
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 65,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "left",
+            "axisLabel": "Events",
+            "axisCenteredZero": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "control"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "runtime"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "network"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "workload"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#008a8a"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1m",
+      "maxDataPoints": 120
+    },
+    {
+      "id": 11,
+      "title": "Evidence sources",
+      "type": "piechart",
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Received record counts by producer. Workload content is self-reported; control, network and runtime are separate trusted producers.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source)(count_over_time({service_name=\"relayna-cell\"} | cell_id=~\"${cell_id:raw}\" | keep source [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "{{source}}",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "control"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "runtime"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "network"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "workload"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#008a8a"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "pieType": "donut",
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        },
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "source",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "Value #A",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Lifecycle",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Cell admission, preparation, completion, deletion and audit gaps. Select a Cell ID to isolate one lifecycle.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"relayna-cell\",source=\"control\"} | cell_id=~\"${cell_id:raw}\" | event_kind=~\"cell.*|audit.gap\" | json state=\"data.state\", mode=\"data.mode\", image=\"data.image\", error=\"data.error\" | json audit_error=\"data.error\" | label_format detected_level=`{{if or .audit_error (eq .event_kind \"audit.gap\") (eq .event_kind \"network.error\")}}error{{else if eq .event_kind \"network.deny\"}}warn{{else}}info{{end}}` | label_format level=\"{{.detected_level}}\" | line_format `{{.event_kind}}  {{if .state}}state={{.state}} {{end}}{{if .mode}}mode={{.mode}} {{end}}{{.image}} {{.error}}`",
+          "queryType": "range",
+          "legendFormat": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "exact"
+      }
+    },
+    {
+      "id": 21,
+      "title": "API commands and results",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Commands submitted through the API and their results. Includes workspace file helpers. Contained-agent child commands appear in Observed processes.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"relayna-cell\",source=\"control\"} | cell_id=~\"${cell_id:raw}\" | event_kind=~\"execution.*\" | json command=\"data.command\", code=\"data.exit_code\", error=\"data.error\" | json audit_error=\"data.error\" | label_format detected_level=`{{if or .audit_error (eq .event_kind \"audit.gap\") (eq .event_kind \"network.error\")}}error{{else if eq .event_kind \"network.deny\"}}warn{{else}}info{{end}}` | label_format level=\"{{.detected_level}}\" | line_format `{{.event_kind}}  exec={{.execution_id}}  {{.command}}{{if .code}} exit={{.code}}{{end}} {{.error}}`",
+          "queryType": "range",
+          "legendFormat": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "exact"
+      }
+    },
+    {
+      "id": 22,
+      "title": "Observed processes",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 11
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Runtime observation of starts, exec transitions and exits. Clone noise is hidden here; the raw event view includes it. Exit status is the runtime wait status, not the API exit code.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"relayna-cell\",source=\"runtime\"} | cell_id=~\"${cell_id:raw}\" | event_kind=~\"container.start|process.exec|process.exit\" | json pid=\"data.context_data.thread_group_id\", binary=\"data.binary_path\", argv=\"data.argv\", args=\"data.args\", status=\"data.exit_status\" | json audit_error=\"data.error\" | label_format detected_level=`{{if or .audit_error (eq .event_kind \"audit.gap\") (eq .event_kind \"network.error\")}}error{{else if eq .event_kind \"network.deny\"}}warn{{else}}info{{end}}` | label_format level=\"{{.detected_level}}\" | line_format `{{.event_kind}}  pid={{.pid}}  {{.binary}} {{.argv}}{{.args}}{{if .status}} status={{.status}}{{end}}`",
+          "queryType": "range",
+          "legendFormat": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "exact"
+      }
+    },
+    {
+      "id": 23,
+      "title": "Network decisions",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 11
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Proxy authorization decisions for the selected Cells. Direct socket observations remain in raw runtime events.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"relayna-cell\",source=\"network\"} | cell_id=~\"${cell_id:raw}\" | json destination=\"data.destination\", method=\"data.method\", ip=\"data.ip\", reason=\"data.reason\" | json audit_error=\"data.error\" | label_format detected_level=`{{if or .audit_error (eq .event_kind \"audit.gap\") (eq .event_kind \"network.error\")}}error{{else if eq .event_kind \"network.deny\"}}warn{{else}}info{{end}}` | label_format level=\"{{.detected_level}}\" | line_format `{{.event_kind}}  {{.method}} {{.destination}}  {{if .ip}}ip={{.ip}}{{end}} {{.reason}}`",
+          "queryType": "range",
+          "legendFormat": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "exact"
+      }
+    },
+    {
+      "id": 24,
+      "title": "Workload output \u00b7 stdout and stderr",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 11
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cell-loki"
+      },
+      "description": "Untrusted workload output. Contained OpenAI Agents SDK events are visible here. Expand a line to correlate Cell and execution IDs.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"relayna-cell\",source=\"workload\"} | cell_id=~\"${cell_id:raw}\" | json text=\"data.text\", channel=\"data.stream\" | line_format `{{.channel}}  {{.text}}`",
+          "queryType": "range",
+          "legendFormat": "",
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "editorMode": "code",
+          "maxLines": 300,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "\u2014"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "exact"
+      }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Raw audit events \u00b7 full JSON",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 31,
+          "title": "Raw audit events",
+          "type": "logs",
+          "gridPos": {
+            "x": 0,
+            "y": 44,
+            "w": 24,
+            "h": 14
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "cell-loki"
+          },
+          "description": "Original event envelopes, including process clones and syscall records. Latest 500 records in the selected range.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{service_name=\"relayna-cell\"} | cell_id=~\"${cell_id:raw}\"",
+              "queryType": "range",
+              "legendFormat": "",
+              "datasource": {
+                "type": "loki",
+                "uid": "cell-loki"
+              },
+              "editorMode": "code",
+              "maxLines": 500,
+              "direction": "backward"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "min": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "\u2014"
+            },
+            "overrides": []
+          },
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "sortOrder": "Descending",
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "exact"
+          }
+        }
+      ]
+    }
+  ]
+}

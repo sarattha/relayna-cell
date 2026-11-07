@@ -1,0 +1,38 @@
+# Dedicated development VM. No macOS filesystem is mounted into the guest.
+minimumLimaVersion: 2.0.0
+vmType: vz
+arch: aarch64
+cpus: 4
+memory: 8GiB
+disk: 40GiB
+images:
+  - location: https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-arm64.img
+    arch: aarch64
+    digest: sha256:50e24e1fb79e89116e939d90aa7738f7af48c442fa1bc2510131e0b39c50348e
+mounts: []
+containerd:
+  system: false
+  user: false
+portForwards:
+  - guestPort: 3000
+    hostPort: 3300
+    hostIP: 127.0.0.1
+  - guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y ca-certificates curl gnupg zstd iptables python3
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      echo 'deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable' > /etc/apt/sources.list.d/docker.list
+      apt-get update
+      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      systemctl enable --now docker
+      mkdir -p /opt/relayna-cell /var/lib/relayna-cell /run/relayna-cell
+      chmod 0700 /var/lib/relayna-cell /run/relayna-cell
