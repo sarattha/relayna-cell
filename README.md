@@ -4,7 +4,73 @@ Relayna Cell runs agent workloads and delegated tools in gVisor sandboxes. It au
 
 This is a working development MVP for one trusted operator on an Apple Silicon Mac. A dedicated Lima Linux VM hosts Docker, `runsc`, the Cell service, and the Grafana logging stack. Model inference remains outside the sandbox.
 
-Open the [interactive architecture guide](docs/architecture.html) for component responsibilities, trust boundaries, execution flows, sequence diagrams, enforcement, audit delivery, and API/lifecycle details. It is a self-contained HTML file that works offline.
+## Architecture at a glance
+
+Cell separates the **workload sandbox**, the **trusted control plane**, and **shared inference and observability**. Every workload uses gVisor; a local model runs outside the sandbox and returns tool calls for the agent to execute inside it.
+
+```mermaid
+flowchart TB
+    mac["Mac operator<br/>CLI / Go SDK"]
+
+    subgraph vm["Dedicated Lima Linux VM"]
+        direction TB
+        external["Trusted external agent<br/>OpenAI Agents SDK"]
+        server["cell-server · trusted<br/>API · lifecycle<br/>Observer · proxy · audit"]
+        sandbox["gVisor Cell · untrusted<br/>Tools OR complete agent<br/>Bounded workspace"]
+        inference["Inference gateway<br/>Ollama · local model"]
+        observability["Alloy → Loki → Grafana<br/>Audit logs and dashboards"]
+
+        external -->|"delegate tool calls"| server
+        external -->|"model requests"| inference
+        server -->|"Docker + runsc-cell"| sandbox
+        sandbox -. "SecCheck events + captured output" .-> server
+        sandbox -->|"firewall + proxy: exact endpoint grant"| inference
+        server -->|"durable journal → JSONL export"| observability
+    end
+
+    mac -->|"Lima SSH → root-only Unix API"| server
+```
+
+The API/lifecycle controller, SecCheck receiver, egress proxy, and audit store are modules in one Go `cell-server` process. Docker, the VM host, and these modules are trusted. Inference and observability run in separate containers outside gVisor. Grafana is available on the Mac at `localhost:3300`; the management socket and inference service are not published to the Mac network.
+
+### Components
+
+| Component | Role | Implementation |
+| --- | --- | --- |
+| CLI and Go SDK | Create Cells, execute commands, transfer workspace files, and read retained events through Lima SSH. | [`cmd/cell`](cmd/cell), [`pkg/client`](pkg/client) |
+| Cell API and lifecycle controller | Validate requests, manage deadlines and execution, revoke access, and clean up runtime resources. | [`internal/api`](internal/api), [`internal/engine`](internal/engine) |
+| Docker adapter and gVisor | Require `runsc-cell`, isolate the workload, and apply filesystem, identity, CPU, memory, and process restrictions. | [`internal/runtime`](internal/runtime), [`deploy/runtime`](deploy/runtime) |
+| Workload and `cell-init` | Run delegated commands or the complete agent; keep files in a bounded, per-Cell workspace. | [`cmd/cell-init`](cmd/cell-init), [`examples/agents-sdk`](examples/agents-sdk) |
+| Egress proxy and host firewall | Block direct egress and authorize exact HTTP/CONNECT destinations. An offline Cell has no external network. | [`internal/network`](internal/network), [`scripts/network-guard.sh`](scripts/network-guard.sh) |
+| Inference gateway and Ollama | Share the local model while exposing Chat Completions and restricting model-management routes. | [`deploy/inference`](deploy/inference) |
+| SecCheck receiver | Receive gVisor process/connection observations outside the workload and attach trusted runtime provenance. | [`internal/observer`](internal/observer) |
+| Audit journal and export | Commit events to SQLite, then export JSONL with stable event IDs; retain evidence after Cell deletion. | [`internal/audit`](internal/audit) |
+| Grafana Alloy and Loki | Tail the exported records, forward them with retry, and store the searchable log projection. | [`deploy/observability`](deploy/observability) |
+| Grafana | Show activity charts, outcomes, destinations, and per-Cell investigations with readable and raw logs. | [`deploy/observability/grafana`](deploy/observability/grafana) |
+
+### Audit flow
+
+```mermaid
+flowchart LR
+    journal[("SQLite journal<br/>+ JSONL export")] -->|"tail files"| alloy["Grafana Alloy"]
+    alloy -->|"forward + retry"| loki["Loki"]
+    loki -->|"query"| grafana["Grafana"]
+```
+
+Control-plane lifecycle events, proxy decisions, captured workload output, and gVisor SecCheck observations enter the journal. SQLite is authoritative; Loki is a downstream projection. Workload output retains its own source label and is not treated as trusted runtime evidence.
+
+### Two execution modes
+
+| | Agent delegates tools | Entire agent inside a Cell |
+| --- | --- | --- |
+| Agent loop | A trusted external agent calls the model and Cell API. | The agent and its tool subprocesses run inside gVisor. |
+| Execution flow | Agent → Cell API → sandboxed command → result returned to agent. | Agent → approved inference endpoint → local tool subprocess → next agent turn. |
+| Network boundary | Tool Cell can remain offline; the external agent handles inference. | Cell receives an explicit grant for the inference gateway. Other destinations remain denied. |
+| Workspace | Shared between commands until the Cell ends. | Shared by the agent and its tools until the Cell ends. |
+
+**Enforcement and auditing have different roles.** Filesystem, network, and resource restrictions enforce the sandbox boundary. Runtime audit events are asynchronous evidence, not synchronous approval of every operation. The current MVP does not guarantee detection of every escape attempt before it succeeds; silent removal of a trace session remains a known monitoring gap.
+
+For deeper detail, see the [architecture decisions](docs/architecture.md). Download and open the [interactive architecture guide](docs/architecture.html) for component details, execution flows, and sequence diagrams; the HTML guide works offline.
 
 ## Start on macOS
 
