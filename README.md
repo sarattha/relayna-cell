@@ -2,42 +2,25 @@
 
 Relayna Cell runs agent workloads and delegated tools in gVisor sandboxes. It audits process execution and enforces network, filesystem, and resource restrictions. The Go implementation supports both an external agent submitting commands and a complete agent running inside a Cell.
 
-This is a development MVP for one trusted operator on a dedicated Linux VM, including Lima on an Apple Silicon Mac. Docker or Podman hosts `runsc`, the Cell service, and the Grafana logging stack. Model inference remains outside the sandbox.
+This development MVP supports one trusted operator. The control plane manages sandboxed execution, while inference and observability remain outside the workload sandbox.
 
 ## Architecture at a glance
 
 Cell separates the **workload sandbox**, the **trusted control plane**, and **shared inference and observability**. Every workload uses gVisor; a local model runs outside the sandbox and returns tool calls for the agent to execute inside it.
 
-```mermaid
-flowchart TB
-    mac["Operator<br/>CLI / Go SDK"]
+[![Relayna Cell logical architecture: Linux, macOS, and Windows clients connect to a trusted Cell service; Docker or Podman runs gVisor tool sessions or contained agents; approved inference passes through a policy proxy and gateway; SQLite audit events flow through JSONL, Alloy, Loki, and Grafana.](docs/assets/relayna-cell-architecture.png)](docs/assets/relayna-cell-architecture.png)
 
-    subgraph vm["Dedicated Linux VM"]
-        direction TB
-        external["Trusted external agent<br/>OpenAI Agents SDK"]
-        server["cell-server · trusted<br/>API · lifecycle<br/>Observer · proxy · audit"]
-        sandbox["gVisor Cell · untrusted<br/>Tools OR complete agent<br/>Bounded workspace"]
-        inference["Inference gateway<br/>Ollama · llama.cpp<br/>vLLM · SGLang"]
-        observability["Alloy → Loki → Grafana<br/>Audit logs and dashboards"]
+[Open the full-size diagram](docs/assets/relayna-cell-architecture.png).
 
-        external -->|"delegate tool calls"| server
-        external -->|"model requests"| inference
-        server -->|"Docker / Podman + runsc-cell"| sandbox
-        sandbox -. "SecCheck events + captured output" .-> server
-        sandbox -->|"firewall + proxy: exact endpoint grant"| inference
-        server -->|"durable journal → JSONL export"| observability
-    end
+The API, lifecycle controller, egress proxy, SecCheck receiver, and audit store are modules in one Go `cell-server` process. The host, container engine, and control plane are trusted; agent workloads run inside the gVisor boundary. External agents can delegate tools to a Cell, or the complete agent loop can run inside one.
 
-    mac -->|"Local / Lima SSH → root-only Unix API"| server
-```
-
-The API/lifecycle controller, SecCheck receiver, egress proxy, and audit store are modules in one Go `cell-server` process. The container engine, VM host, and these modules are trusted. Inference and observability run in separate containers outside gVisor. Grafana is available on Linux loopback at `localhost:3000`, or through the existing Lima setup on the Mac at `localhost:3300`. The management API uses a root-only Unix socket.
+This is a logical architecture, independent of the operator’s operating system. The execution backend currently requires a Linux host or Linux VM; platform-specific setup and validation details are in the deployment guides below.
 
 ### Components
 
 | Component | Role | Implementation |
 | --- | --- | --- |
-| CLI and Go SDK | Create Cells, execute commands, transfer workspace files, and read retained events through the Unix API or Lima SSH. | [`cmd/cell`](cmd/cell), [`pkg/client`](pkg/client) |
+| CLI and Go SDK | Create Cells, execute commands, transfer workspace files, and read retained events through the management API. | [`cmd/cell`](cmd/cell), [`pkg/client`](pkg/client) |
 | Cell API and lifecycle controller | Validate requests, manage deadlines and execution, revoke access, and clean up runtime resources. | [`internal/api`](internal/api), [`internal/engine`](internal/engine) |
 | Docker / Podman adapters and gVisor | Require `runsc-cell`, isolate the workload, and apply filesystem, identity, CPU, memory, and process restrictions. | [`internal/runtime`](internal/runtime), [`deploy/runtime`](deploy/runtime) |
 | Workload and `cell-init` | Run delegated commands or the complete agent; keep files in a bounded, per-Cell workspace. | [`cmd/cell-init`](cmd/cell-init), [`examples/agents-sdk`](examples/agents-sdk) |
@@ -50,12 +33,7 @@ The API/lifecycle controller, SecCheck receiver, egress proxy, and audit store a
 
 ### Audit flow
 
-```mermaid
-flowchart LR
-    journal[("SQLite journal<br/>+ JSONL export")] -->|"tail files"| alloy["Grafana Alloy"]
-    alloy -->|"forward + retry"| loki["Loki"]
-    loki -->|"query"| grafana["Grafana"]
-```
+**SQLite journal → JSONL export → Grafana Alloy → Loki → Grafana**, as shown in the diagram.
 
 Control-plane lifecycle events, proxy decisions, captured workload output, and gVisor SecCheck observations enter the journal. SQLite is authoritative; Loki is a downstream projection. Workload output retains its own source label and is not treated as trusted runtime evidence.
 
