@@ -50,36 +50,184 @@ Control-plane lifecycle events, proxy decisions, captured workload output, and g
 
 For deeper detail, see the [architecture decisions](docs/architecture.md). Download and open the [interactive architecture guide](docs/architecture.html) for component details, execution flows, and sequence diagrams; the HTML guide works offline.
 
+## Setup
+
+Choose the path for the machine where you are starting:
+
+- [Linux](#start-on-linux): install directly on a dedicated Linux host or VM, choosing Docker/Podman and an optional inference engine.
+- [macOS](#start-on-macos): create a dedicated Lima Linux VM from an Apple Silicon Mac, then install Cell and its dashboards into that VM.
+
+The MVP implementation is currently on the branch used by [draft PR #1](https://github.com/sarattha/relayna-cell/pull/1). The checkout commands below select that branch; use your chosen release or branch when installing another version. If you already have this checkout, skip cloning and enter its root directory. Run subsequent project commands from that directory.
+
 ## Start on Linux
 
-From a checkout on a dedicated systemd Linux VM:
+### 1. Prepare the Linux machine
+
+Use a dedicated Ubuntu/Debian systemd host or VM with kernel 5.6+, cgroup v2, and root/sudo access. The installer accepts x86_64 and ARM64; real installation tests currently cover ARM64. For the small CPU model, allow at least 3.5 GiB RAM and 8 GiB free disk; a 32 GiB VM disk leaves room for images, builds, and updates.
+
+Install the prerequisites yourself before running Cell setup:
+
+- **One rootful container engine:** [Docker Engine](https://docs.docker.com/engine/install/) with its daemon running and the iptables `DOCKER-USER` chain, or [Podman](https://podman.io/docs/installation) with Netavark and nftables.
+- **Host tools:** Git, Bash, Python 3.10+ with SQLite support, curl, tar with zstd support, zstd, systemctl, and flock. Docker also requires `dockerd`, iptables, and ip6tables; Podman requires `nft`.
+- **For vLLM/SGLang:** a supported NVIDIA GPU, compatible drivers, and configured NVIDIA Container Toolkit. See the [GPU prerequisites and validation limits](docs/linux-setup.md#supported-profiles-and-prerequisites).
+
+The installer reports missing infrastructure and stops. It does not install OS packages, container engines, or GPU drivers. Cell embeds SQLite, and the default build runs in a Go container. See the [Linux setup guide](docs/linux-setup.md) for the full host profile, sizing, and unsupported configurations.
+
+### 2. Check out the code and run setup
+
+Run these commands **on the Linux machine**:
 
 ```bash
+git clone --branch t3/analyze-latest-architecture https://github.com/sarattha/relayna-cell.git
+cd relayna-cell
 sudo bash scripts/setup-linux.sh
 ```
 
-Choose **Docker or Podman**, then **Ollama, llama.cpp, vLLM, SGLang, or skip local inference**. The installer checks infrastructure first and asks you to install missing prerequisites yourself. Once checks pass, it installs Cell and gVisor, initializes SQLite storage, pulls the selected images/model, and provisions **Loki, Alloy, Grafana, and both dashboards**. It verifies an actual sandbox execution and audit delivery before reporting success.
+The interactive installer asks, in order:
 
-Ollama/llama.cpp profiles use CPU; vLLM/SGLang profiles require a configured NVIDIA GPU. See the [Linux setup guide](docs/linux-setup.md) for prerequisites, unattended flags, model choices, access, and validation limits. Kubernetes support is planned separately.
+1. **Container engine:** Docker or Podman.
+2. **Inference engine:** Ollama, llama.cpp, vLLM, SGLang, or skip local inference.
+3. **Model:** accept the small Qwen3 0.6B default or supply a model name; llama.cpp accepts a local GGUF path.
+
+Ollama and llama.cpp use CPU in these profiles. vLLM and SGLang use NVIDIA GPU profiles; actual GPU execution remains unverified in this environment. Skipping inference still installs Cell and the complete observability stack.
+
+Once prerequisites pass, setup pulls images, builds or installs Cell, installs checksum-verified gVisor, configures the sandbox runtime and network guard, initializes SQLite storage, and starts the systemd services. It also configures **Grafana Alloy, Loki, Grafana's Loki datasource, and both dashboards**, plus the selected inference engine and restricted gateway. Installation succeeds only after the sandbox, audit delivery, and dashboard checks pass.
+
+For a check-only run, or unattended installation, use explicit choices:
+
+```bash
+# Check prerequisites without downloading or installing anything.
+sudo bash scripts/setup-linux.sh --engine docker --inference ollama --model qwen3:0.6b --check
+
+# Example unattended installation with Docker and CPU inference.
+sudo bash scripts/setup-linux.sh --engine docker --inference ollama --model qwen3:0.6b
+```
+
+### 3. Verify Cell and open Grafana
+
+```bash
+sudo cell health
+sudo systemctl status cell-server relayna-infrastructure
+
+# Repeat the sandbox, audit, dashboard, and selected-model checks.
+sudo python3 /opt/relayna-cell/scripts/verify-linux-setup.py
+```
+
+Open the [overview](http://127.0.0.1:3000/d/relayna-cell) or [audit dashboard](http://127.0.0.1:3000/d/relayna-cell-audit) on the Linux machine. Grafana listens on loopback port **3000** with anonymous Viewer access. For a remote machine, open a tunnel **from your own computer**, keep it running, and use the same browser links:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 USER@LINUX_HOST
+```
+
+Settings are saved in `/etc/relayna-cell/setup.json`. If inference was selected, `/etc/relayna-cell/inference.json` records the model and endpoint, and `/etc/relayna-cell/model-cell.json` contains an example Cell with the exact gateway grant:
+
+```bash
+sudo cell create -f /etc/relayna-cell/model-cell.json
+```
+
+### 4. Stop, start, or update
+
+```bash
+# Stop workloads and infrastructure; retain stored data.
+sudo systemctl stop cell-server relayna-infrastructure
+
+# Start the installed services again.
+sudo systemctl start relayna-infrastructure cell-server
+
+# Diagnose a startup or verification failure.
+sudo journalctl -u cell-server -u relayna-infrastructure -n 100 --no-pager
+```
+
+To update, check out the intended version and rerun `scripts/setup-linux.sh` with the **same container engine**. Rerunning stops active Cells and replaces managed infrastructure containers while preserving the journal, observability volumes, and model cache. Engine migration and adoption of the macOS/Lima installation are not supported by this script. See [reruns and lifecycle](docs/linux-setup.md#reruns-and-lifecycle), including when to recreate model-enabled Cells after a gateway restart.
 
 ## Start on macOS
 
-Requirements: Apple Silicon, Go 1.26 or newer, Lima 2 or newer, and approximately 8 GiB available memory plus space for a 40 GiB sparse VM disk. The VM does not mount your Mac home directory or project files. Docker Desktop can remain installed and running; Cell uses its own VM and Docker daemon.
+### 1. Prepare the Mac
+
+The supplied VM configuration targets **Apple Silicon** and allocates **4 CPUs, 8 GiB RAM, and a 40 GiB sparse disk**. Have that memory and disk capacity available. Install Xcode Command Line Tools for Git and Make (`xcode-select --install` if needed), then [Homebrew](https://docs.brew.sh/Installation) and the host tools:
 
 ```bash
-brew install lima
-make vm-up
-make install
-./scripts/cell health
+brew install go lima python
+go version          # Go 1.26 or newer
+limactl --version   # Lima 2 or newer
+python3 --version
 ```
 
-`make install` cross-compiles the Go binaries, copies the project deployment files into the VM, installs the pinned gVisor release, configures the network guard, and starts Cell plus Loki, Alloy, and Grafana. Reinstalling stops active Cells; their audit records remain. Initial provisioning downloads Ubuntu, Docker packages, and container images.
+[Lima's installation guide](https://lima-vm.io/docs/installation/) covers other installation methods. This workflow uses Docker inside its own Linux VM. Docker Desktop can remain installed, but Cell does not use its daemon. The VM does not mount your Mac home directory or project files.
 
-Open [Grafana on localhost](http://localhost:3300/d/relayna-cell/relayna-cell). It provides a local, anonymous **Viewer** account with a provisioned Loki datasource and dashboards. Only Grafana is forwarded to macOS, on loopback. Loki and the management API are not exposed on the Mac network.
+### 2. Create the VM and install Cell
 
-The native Mac CLI uses SSH stdio through Lima to the root-only Unix socket inside the VM. There is no TCP management API or Docker socket exposed to workloads.
+Run these commands **in a macOS terminal**. If you already have the checkout, enter it and start at `make vm-up`:
+
+```bash
+git clone --branch t3/analyze-latest-architecture https://github.com/sarattha/relayna-cell.git
+cd relayna-cell
+make vm-up
+make install
+```
+
+`make vm-up` creates and starts the `relayna-cell` Lima VM. Its provisioning script downloads Ubuntu and installs Docker Engine, Compose, and Linux utilities **inside that dedicated VM**. `make install` builds the native Mac CLI and Linux ARM64 binaries, copies deployment files into the VM, installs gVisor, configures the network guard, starts Cell, and provisions **Alloy, Loki, Grafana, the datasource, and both dashboards**.
+
+This macOS shortcut uses a fixed Docker deployment; it does **not** present the Linux installer's engine-selection menu. To choose Podman or a different inference profile from a Mac, prepare a separate Linux VM and follow [Start on Linux](#start-on-linux) inside it. Keep that installation separate from the `make install` workflow.
+
+### 3. Verify the VM and open Grafana
+
+From **macOS**:
+
+```bash
+limactl list
+./scripts/cell health
+make smoke
+```
+
+Expect `relayna-cell` to show `Running`. The health command connects over Lima SSH to the root-only Unix API in the VM. `make smoke` runs real sandbox, policy, audit, and Loki recovery checks and cleans up its test Cells.
+
+Open the [overview](http://localhost:3300/d/relayna-cell) or [audit dashboard](http://localhost:3300/d/relayna-cell-audit) on the Mac. Lima forwards Grafana's guest port 3000 to **localhost:3300** on macOS, with anonymous Viewer access. Grafana is the only application port forwarded to the Mac; management uses Lima's SSH transport to reach the root-only Unix socket.
+
+To inspect Linux directly:
+
+```bash
+# Run on macOS to enter the guest.
+limactl shell relayna-cell
+
+# Now inside Linux.
+uname -s
+sudo systemctl status cell-server
+exit
+```
+
+After `exit`, you are back on macOS. Run `limactl`, project `make` targets, and `./scripts/cell` on the **Mac**, not inside the guest. A `limactl: command not found` message inside the VM means you are already in Linux.
+
+### 4. Optionally add Ollama and test the agent framework
+
+From the project directory **on macOS**, after the base checks pass:
+
+```bash
+make inference-up   # start Ollama + gateway and download Qwen3 4B Instruct
+make agents-build   # build the OpenAI Agents SDK example image
+make model-smoke    # test delegated tools and a complete contained agent
+```
+
+This path uses the VM's CPU and stores the model in a persistent Docker volume. It does not require an OpenAI API key. See [Local Ollama and OpenAI Agents SDK](#local-ollama-and-openai-agents-sdk) for model details, expected results, and inspection commands.
+
+### 5. Stop, resume, or update
+
+Run these commands **on macOS**:
+
+```bash
+limactl stop relayna-cell    # stop the VM without deleting its disk
+limactl start relayna-cell   # resume the existing VM
+./scripts/cell health
+
+# Inspect the Cell service's logs inside the VM.
+limactl shell relayna-cell sudo journalctl -u cell-server -n 100 --no-pager
+```
+
+To update Cell, check out the intended version and rerun `make install` on the Mac. It stops active Cells and restarts Docker in the dedicated VM; stored audit records and named data volumes remain. Use `make dashboards-up` when only the dashboard definitions need updating.
 
 ## Delegate commands from an external agent
+
+The CLI examples below use the **macOS** wrapper `./scripts/cell`. After the **Linux** installation, replace that prefix with `sudo cell` and run from the Linux checkout directory.
 
 ```bash
 ./scripts/cell create -f examples/session.json
@@ -94,13 +242,13 @@ The native Mac CLI uses SSH stdio through Lima to the root-only Unix socket insi
 
 The workspace survives tool calls within the same Cell. It is a bounded tmpfs and is destroyed with the runtime. Download artifacts **before** deleting the Cell or letting its lifetime expire. Uploads, downloads, stdin, and execution output are limited to 4 MiB per operation.
 
-Run a complete external integration example with:
+The macOS/Lima Python integration example is:
 
 ```bash
 python3 examples/external-agent.py
 ```
 
-The Go SDK lives in `pkg/client`. Use `client.NewLima("relayna-cell")` from macOS, or `client.New("/run/relayna-cell/api.sock")` from an authorized process inside the VM. The external agent's actions outside the Cell are outside Cell's isolation boundary.
+The Go SDK lives in `pkg/client`. Use `client.NewLima("relayna-cell")` from macOS, or `client.New("/run/relayna-cell/api.sock")` from an authorized process on the Linux host or inside the VM. The external agent's actions outside the Cell are outside Cell's isolation boundary.
 
 ## Run a complete agent inside a Cell
 
@@ -163,12 +311,12 @@ See [the SDK agent](examples/agents-sdk/agent.py) and [inference deployment](dep
 
 The collector and control plane store structured events in SQLite and fsync JSONL export segments outside the sandbox. Alloy tails those segments and sends them to Loki. Grafana provides execution, process, network, and workload-output views.
 
-- [Overview](http://localhost:3300/d/relayna-cell/relayna-cell): summary cards, activity trends, execution and network outcomes, binary/destination rankings, workload modes, and recent Cell outcomes. Click a Cell in the outcome table to investigate it.
-- [Investigation](http://localhost:3300/d/relayna-cell-audit/relayna-cell-investigation): a shared Cell ID and time filter, readable lifecycle/command/process/network logs, workload output, and an expandable raw-JSON section. Dashboard links preserve the filters and time range.
+- **Overview** ([Linux](http://127.0.0.1:3000/d/relayna-cell), [macOS](http://localhost:3300/d/relayna-cell)): summary cards, activity trends, execution and network outcomes, binary/destination rankings, workload modes, and recent Cell outcomes. Click a Cell in the outcome table to investigate it.
+- **Investigation** ([Linux](http://127.0.0.1:3000/d/relayna-cell-audit), [macOS](http://localhost:3300/d/relayna-cell-audit)): a shared Cell ID and time filter, readable lifecycle/command/process/network logs, workload output, and an expandable raw-JSON section. Dashboard links preserve the filters and time range.
 
 Totals count events received by Loki in the selected window. Headline and category totals deduplicate stable event IDs (requested Cells use Cell IDs); activity charts count received records per interval and can include replay duplicates. These are historical observations, not live-state or service-health gauges. Expected restriction-test failures are included. API execution counts include file-transfer helpers; process exec counts exclude initial container starts and clones. No CPU/memory utilization is collected yet.
 
-Dashboard definitions are generated by `scripts/build-dashboards.py` and checked into `deploy/observability/grafana/dashboards/`. Run `make dashboards-up` to regenerate and deploy only the dashboards without restarting Cell or the logging stack. Grafana's file provider applies them automatically; refresh an already-open dashboard tab afterward.
+Dashboard definitions are generated by `scripts/build-dashboards.py` and checked into `deploy/observability/grafana/dashboards/`. On macOS, run `make dashboards-up` to regenerate and deploy only the dashboards without restarting Cell or the logging stack. Grafana's file provider applies them automatically; refresh an already-open dashboard tab afterward.
 
 - Workload text is nested inside a trusted envelope; it cannot supply audit provenance or indexed labels.
 - Indexed labels are bounded: `service_name`, `environment`, and `source`. Cell, execution, and event IDs are structured metadata. Export filenames are removed from labels.
@@ -177,7 +325,7 @@ Dashboard definitions are generated by `scripts/build-dashboards.py` and checked
 - Alloy persists file positions and retries Loki delivery. This is not exactly-once delivery, and an Alloy crash can require replay. Event IDs remain stable during replay. The experimental Alloy Loki WAL is not required.
 - Environment arrays are excluded from process events. Command arguments and workload output can still contain secrets; applications should avoid putting credentials there.
 
-To replay committed events after an ingestion failure, stop Cell, export, and restart it. This ends active workloads, but leaves stored audit records intact:
+To replay committed events after an ingestion failure, stop Cell, export, and restart it. This ends active workloads, but leaves stored audit records intact. These commands run on macOS; on the Linux installation, run the `sudo ...` portions directly on the Linux machine:
 
 ```bash
 limactl shell relayna-cell sudo systemctl stop cell-server
@@ -188,6 +336,8 @@ limactl shell relayna-cell sudo systemctl start cell-server
 Replay requires enough room within the export budget and may produce duplicate Loki entries. Do not delete the SQLite journal when rotating or archiving export files.
 
 ## Validate
+
+For the Linux installation, use `sudo python3 /opt/relayna-cell/scripts/verify-linux-setup.py` on the Linux machine. The commands below are development checks from the macOS checkout; `make test` itself can run wherever the required Go toolchain is installed.
 
 ```bash
 make test       # Go tests, race detector, and vet
@@ -200,11 +350,7 @@ The integration test checks both execution modes, workspace transfer, read-only 
 
 The runtime and protobuf schema are pinned to gVisor `release-20261102.0`. Runtime archives and the Ubuntu base image have checked digests. Grafana, Alloy, and Loki have explicit version tags in `deploy/observability/compose.yaml`; dependency versions are recorded in `go.mod` and `go.sum`.
 
-To stop the development environment without deleting data:
-
-```bash
-limactl stop relayna-cell
-```
+Stop and resume commands for each platform are included in the [Linux](#4-stop-start-or-update) and [macOS](#5-stop-resume-or-update) setup sections above. Both preserve stored audit data.
 
 ## Project layout
 
