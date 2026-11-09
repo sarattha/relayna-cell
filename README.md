@@ -2,7 +2,7 @@
 
 Relayna Cell runs agent workloads and delegated tools in gVisor sandboxes. It audits process execution and enforces network, filesystem, and resource restrictions. The Go implementation supports both an external agent submitting commands and a complete agent running inside a Cell.
 
-This is a working development MVP for one trusted operator on an Apple Silicon Mac. A dedicated Lima Linux VM hosts Docker, `runsc`, the Cell service, and the Grafana logging stack. Model inference remains outside the sandbox.
+This is a development MVP for one trusted operator on a dedicated Linux VM, including Lima on an Apple Silicon Mac. Docker or Podman hosts `runsc`, the Cell service, and the Grafana logging stack. Model inference remains outside the sandbox.
 
 ## Architecture at a glance
 
@@ -10,39 +10,39 @@ Cell separates the **workload sandbox**, the **trusted control plane**, and **sh
 
 ```mermaid
 flowchart TB
-    mac["Mac operator<br/>CLI / Go SDK"]
+    mac["Operator<br/>CLI / Go SDK"]
 
-    subgraph vm["Dedicated Lima Linux VM"]
+    subgraph vm["Dedicated Linux VM"]
         direction TB
         external["Trusted external agent<br/>OpenAI Agents SDK"]
         server["cell-server · trusted<br/>API · lifecycle<br/>Observer · proxy · audit"]
         sandbox["gVisor Cell · untrusted<br/>Tools OR complete agent<br/>Bounded workspace"]
-        inference["Inference gateway<br/>Ollama · local model"]
+        inference["Inference gateway<br/>Ollama · llama.cpp<br/>vLLM · SGLang"]
         observability["Alloy → Loki → Grafana<br/>Audit logs and dashboards"]
 
         external -->|"delegate tool calls"| server
         external -->|"model requests"| inference
-        server -->|"Docker + runsc-cell"| sandbox
+        server -->|"Docker / Podman + runsc-cell"| sandbox
         sandbox -. "SecCheck events + captured output" .-> server
         sandbox -->|"firewall + proxy: exact endpoint grant"| inference
         server -->|"durable journal → JSONL export"| observability
     end
 
-    mac -->|"Lima SSH → root-only Unix API"| server
+    mac -->|"Local / Lima SSH → root-only Unix API"| server
 ```
 
-The API/lifecycle controller, SecCheck receiver, egress proxy, and audit store are modules in one Go `cell-server` process. Docker, the VM host, and these modules are trusted. Inference and observability run in separate containers outside gVisor. Grafana is available on the Mac at `localhost:3300`; the management socket and inference service are not published to the Mac network.
+The API/lifecycle controller, SecCheck receiver, egress proxy, and audit store are modules in one Go `cell-server` process. The container engine, VM host, and these modules are trusted. Inference and observability run in separate containers outside gVisor. Grafana is available on Linux loopback at `localhost:3000`, or through the existing Lima setup on the Mac at `localhost:3300`. The management API uses a root-only Unix socket.
 
 ### Components
 
 | Component | Role | Implementation |
 | --- | --- | --- |
-| CLI and Go SDK | Create Cells, execute commands, transfer workspace files, and read retained events through Lima SSH. | [`cmd/cell`](cmd/cell), [`pkg/client`](pkg/client) |
+| CLI and Go SDK | Create Cells, execute commands, transfer workspace files, and read retained events through the Unix API or Lima SSH. | [`cmd/cell`](cmd/cell), [`pkg/client`](pkg/client) |
 | Cell API and lifecycle controller | Validate requests, manage deadlines and execution, revoke access, and clean up runtime resources. | [`internal/api`](internal/api), [`internal/engine`](internal/engine) |
-| Docker adapter and gVisor | Require `runsc-cell`, isolate the workload, and apply filesystem, identity, CPU, memory, and process restrictions. | [`internal/runtime`](internal/runtime), [`deploy/runtime`](deploy/runtime) |
+| Docker / Podman adapters and gVisor | Require `runsc-cell`, isolate the workload, and apply filesystem, identity, CPU, memory, and process restrictions. | [`internal/runtime`](internal/runtime), [`deploy/runtime`](deploy/runtime) |
 | Workload and `cell-init` | Run delegated commands or the complete agent; keep files in a bounded, per-Cell workspace. | [`cmd/cell-init`](cmd/cell-init), [`examples/agents-sdk`](examples/agents-sdk) |
 | Egress proxy and host firewall | Block direct egress and authorize exact HTTP/CONNECT destinations. An offline Cell has no external network. | [`internal/network`](internal/network), [`scripts/network-guard.sh`](scripts/network-guard.sh) |
-| Inference gateway and Ollama | Share the local model while exposing Chat Completions and restricting model-management routes. | [`deploy/inference`](deploy/inference) |
+| Inference gateway and selected engine | Share the local model while exposing Chat Completions and restricting model-management routes. | [`deploy/inference`](deploy/inference), [`Linux setup`](docs/linux-setup.md) |
 | SecCheck receiver | Receive gVisor process/connection observations outside the workload and attach trusted runtime provenance. | [`internal/observer`](internal/observer) |
 | Audit journal and export | Commit events to SQLite, then export JSONL with stable event IDs; retain evidence after Cell deletion. | [`internal/audit`](internal/audit) |
 | Grafana Alloy and Loki | Tail the exported records, forward them with retry, and store the searchable log projection. | [`deploy/observability`](deploy/observability) |
@@ -71,6 +71,18 @@ Control-plane lifecycle events, proxy decisions, captured workload output, and g
 **Enforcement and auditing have different roles.** Filesystem, network, and resource restrictions enforce the sandbox boundary. Runtime audit events are asynchronous evidence, not synchronous approval of every operation. The current MVP does not guarantee detection of every escape attempt before it succeeds; silent removal of a trace session remains a known monitoring gap.
 
 For deeper detail, see the [architecture decisions](docs/architecture.md). Download and open the [interactive architecture guide](docs/architecture.html) for component details, execution flows, and sequence diagrams; the HTML guide works offline.
+
+## Start on Linux
+
+From a checkout on a dedicated systemd Linux VM:
+
+```bash
+sudo bash scripts/setup-linux.sh
+```
+
+Choose **Docker or Podman**, then **Ollama, llama.cpp, vLLM, SGLang, or skip local inference**. The installer checks infrastructure first and asks you to install missing prerequisites yourself. Once checks pass, it installs Cell and gVisor, initializes SQLite storage, pulls the selected images/model, and provisions **Loki, Alloy, Grafana, and both dashboards**. It verifies an actual sandbox execution and audit delivery before reporting success.
+
+Ollama/llama.cpp profiles use CPU; vLLM/SGLang profiles require a configured NVIDIA GPU. See the [Linux setup guide](docs/linux-setup.md) for prerequisites, unattended flags, model choices, access, and validation limits. Kubernetes support is planned separately.
 
 ## Start on macOS
 
@@ -167,7 +179,7 @@ See [the SDK agent](examples/agents-sdk/agent.py) and [inference deployment](dep
 - API executions are serialized within each Cell. Cancelling an execution, disconnecting its output stream, or exceeding its timeout stops the **whole Cell**, so detached descendants cannot continue unaudited.
 - Process execution is audited, not synchronously approved. Shell built-ins and in-process language operations are not each represented as separate process executions. Network auditing covers proxy decisions and configured connection trace points; it is not a complete packet capture or HTTPS content inspection.
 - Tracing is configured before startup. Detected trace drops, unexpected audit disconnects, or journal write failures stop affected workloads. Detection is asynchronous and does not promise that no operation can occur before the stop.
-- A server restart removes owned runtime resources and marks interrupted sessions. It does not resume workloads through a monitoring gap. Host administrators, Docker, the VM kernel, and Cell services remain trusted.
+- A server restart removes owned runtime resources and marks interrupted sessions. It does not resume workloads through a monitoring gap. Host administrators, the container engine, the VM kernel, and Cell services remain trusted.
 
 ## Loki and Alloy logging
 

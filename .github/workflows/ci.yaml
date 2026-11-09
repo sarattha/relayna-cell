@@ -16,5 +16,7 @@ jobs:
       - run: make test
       - run: make build build-linux
       - run: python3 scripts/build-dashboards.py --check
+      - run: python3 scripts/test-linux-setup.py
+      - run: bash -n scripts/setup-linux.sh scripts/network-guard.sh
       - run: docker compose -f deploy/observability/compose.yaml config --quiet
       - run: docker compose -f deploy/inference/compose.yaml config --quiet

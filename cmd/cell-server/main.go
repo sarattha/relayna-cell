@@ -28,6 +28,7 @@ func main() {
 func run() error {
 	data := flag.String("data-dir", "/var/lib/relayna-cell", "persistent state directory")
 	rundir := flag.String("run-dir", "/run/relayna-cell", "Unix socket directory")
+	containerEngine := flag.String("engine", "docker", "local rootful container engine: docker or podman")
 	flag.Parse()
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("run cell-server as root inside the dedicated Linux VM")
@@ -49,11 +50,20 @@ func run() error {
 		return e
 	}
 	defer store.Close()
-	backend, e := runtime.New()
-	if e != nil {
-		return e
+	var backend engine.Backend
+	switch *containerEngine {
+	case "docker":
+		docker, err := runtime.New()
+		if err != nil {
+			return err
+		}
+		defer docker.Client.Close()
+		backend = docker
+	case "podman":
+		backend = &runtime.Podman{}
+	default:
+		return fmt.Errorf("unsupported engine %q; use docker or podman", *containerEngine)
 	}
-	defer backend.Client.Close()
 	m, e := engine.New(store, backend)
 	if e != nil {
 		return e
@@ -87,7 +97,7 @@ func run() error {
 	errs := make(chan error, 2)
 	go func() { errs <- srv.Serve(l) }()
 	go func() { errs <- proxy.Serve(proxyListener) }()
-	if e = store.Emit("", "", "control", "server.started", map[string]string{"runtime": runtime.RuntimeName}); e != nil {
+	if e = store.Emit("", "", "control", "server.started", map[string]string{"runtime": runtime.RuntimeName, "engine": *containerEngine}); e != nil {
 		return e
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
