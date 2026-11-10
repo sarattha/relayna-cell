@@ -1,10 +1,14 @@
 # Linux VM installation
 
-Run the Bash installer **on the target Linux machine**, from a checkout of this repository:
+Prepare the [required infrastructure](#supported-profiles-and-prerequisites) below, then run these commands **on the target Linux machine**:
 
 ```bash
+git clone https://github.com/sarattha/relayna-cell.git
+cd relayna-cell
 sudo bash scripts/setup-linux.sh
 ```
+
+If you already have the checkout, enter its root directory and skip cloning. The installer uses the checked-out version; select a release tag before setup when you need a specific version. From a Mac, either connect to your Linux machine over SSH and follow this guide there, or use the separate [macOS/Lima walkthrough](../README.md#start-on-macos). The Lima Make targets are run on macOS.
 
 It asks, in order:
 
@@ -54,6 +58,8 @@ sudo bash scripts/setup-linux.sh --engine docker --inference none \
 
 Noninteractive use requires both engine flags. The binary directory must contain native `cell`, `cell-init`, and `cell-server` ELF binaries. `--model` is an Ollama model tag, a local GGUF path for llama.cpp, or a public Hugging Face model repository for vLLM/SGLang. Models are downloaded by trusted infrastructure; Cells themselves remain subject to the network policy.
 
+A successful `--check` ends with `All prerequisites green. Check only: nothing installed.` Run the full command without `--check` to install. A successful installation ends with `Relayna Cell is ready.` after the completion checks below. If a prerequisite is missing, install or configure it yourself and repeat the preflight with your chosen engine and inference flags.
+
 ## What setup installs
 
 - Cell CLI, init, and server under `/opt/relayna-cell/bin`, with `/usr/local/bin/cell` as a launcher.
@@ -91,7 +97,7 @@ Inference settings are in `/etc/relayna-cell/inference.json`. The host-only endp
 sudo cell create -f /etc/relayna-cell/model-cell.json
 ```
 
-For OpenAI Agents SDK, use the recorded model/base URL with its Chat Completions adapter and disable OpenAI tracing, as in [`examples/agents-sdk`](../examples/agents-sdk). The Linux smoke test validates the selected backend's Chat Completions response, not every framework/tool-calling combination. Arbitrary model choices must support the intended agent tool schema.
+For OpenAI Agents SDK, follow the [uv project and rootful container build instructions](../examples/agents-sdk/README.md). Use the recorded model and `base_url` inside a Cell, or `host_base_url` from a trusted Linux host process. A Cell's loopback address refers to itself; the host-only endpoint is for host clients. The Linux smoke test validates the selected backend's Chat Completions response, not every framework/tool-calling combination. Arbitrary model choices must support the intended agent tool schema. The `make agents-build` and `make model-smoke` helpers use the separate macOS/Lima stack.
 
 ## Reruns and lifecycle
 

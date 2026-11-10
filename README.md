@@ -57,7 +57,19 @@ Choose the path for the machine where you are starting:
 - [Linux](#start-on-linux): install directly on a dedicated Linux host or VM, choosing Docker/Podman and an optional inference engine.
 - [macOS](#start-on-macos): create a dedicated Lima Linux VM from an Apple Silicon Mac, then install Cell and its dashboards into that VM.
 
-The MVP implementation is currently on the branch used by [draft PR #1](https://github.com/sarattha/relayna-cell/pull/1). The checkout commands below select that branch; use your chosen release or branch when installing another version. If you already have this checkout, skip cloning and enter its root directory. Run subsequent project commands from that directory.
+The checkout commands below use `main`. To install a particular release, check out its tag before running setup. If you already have this checkout, skip cloning and enter its root directory. Run subsequent project commands from that directory.
+
+| Task | Linux host or VM | macOS terminal → Lima VM |
+| --- | --- | --- |
+| Install Cell, logging, and dashboards | `sudo bash scripts/setup-linux.sh` | `make vm-up`, then `make install` |
+| Container/inference selection | Installer prompts for Docker/Podman and inference engine | Supplied Lima workflow uses Docker; `make inference-up` adds Ollama |
+| Verify sandbox and audit delivery | `sudo python3 /opt/relayna-cell/scripts/verify-linux-setup.py` | `make smoke` |
+| Manage Cells | `sudo cell ...` | `./scripts/cell ...` |
+| Grafana overview | `http://127.0.0.1:3000/d/relayna-cell` | `http://localhost:3300/d/relayna-cell` |
+| Build the optional SDK image | Rootful Docker/Podman build; see the [SDK guide](examples/agents-sdk/README.md#container-build) | `make agents-build` |
+| Test SDK agents with a real model | Installer verifies model connectivity; framework/tool-calling tests require separate integration | `make model-smoke` after inference and image setup |
+
+The setup scripts have platform-specific entry points. `make install`, `make smoke`, `make inference-up`, `make agents-build`, `make model-smoke`, and the `./scripts/cell` wrapper invoke Lima and run from **macOS**. On Linux, use the installer and verification commands in the Linux column. Local uv development works on both platforms.
 
 ## Start on Linux
 
@@ -78,7 +90,7 @@ The installer reports missing infrastructure and stops. It does not install OS p
 Run these commands **on the Linux machine**:
 
 ```bash
-git clone --branch t3/analyze-latest-architecture https://github.com/sarattha/relayna-cell.git
+git clone https://github.com/sarattha/relayna-cell.git
 cd relayna-cell
 sudo bash scripts/setup-linux.sh
 ```
@@ -92,6 +104,8 @@ The interactive installer asks, in order:
 Ollama and llama.cpp use CPU in these profiles. vLLM and SGLang use NVIDIA GPU profiles; actual GPU execution remains unverified in this environment. Skipping inference still installs Cell and the complete observability stack.
 
 Once prerequisites pass, setup pulls images, builds or installs Cell, installs checksum-verified gVisor, configures the sandbox runtime and network guard, initializes SQLite storage, and starts the systemd services. It also configures **Grafana Alloy, Loki, Grafana's Loki datasource, and both dashboards**, plus the selected inference engine and restricted gateway. Installation succeeds only after the sandbox, audit delivery, and dashboard checks pass.
+
+Expect `[OK]` prerequisite checks followed by installation and verification output, ending with **`Relayna Cell is ready.`** A check-only run ends with `All prerequisites green. Check only: nothing installed.` and still requires a subsequent full setup run.
 
 For a check-only run, or unattended installation, use explicit choices:
 
@@ -160,7 +174,7 @@ python3 --version
 Run these commands **in a macOS terminal**. If you already have the checkout, enter it and start at `make vm-up`:
 
 ```bash
-git clone --branch t3/analyze-latest-architecture https://github.com/sarattha/relayna-cell.git
+git clone https://github.com/sarattha/relayna-cell.git
 cd relayna-cell
 make vm-up
 make install
@@ -181,6 +195,8 @@ make smoke
 ```
 
 Expect `relayna-cell` to show `Running`. The health command connects over Lima SSH to the root-only Unix API in the VM. `make smoke` runs real sandbox, policy, audit, and Loki recovery checks and cleans up its test Cells.
+
+Wait for `ALL INTEGRATION CHECKS PASSED` before continuing. In Grafana, both **Relayna Cell** (overview) and **Relayna Cell · Investigation** dashboards should be available; the smoke test supplies initial activity to inspect.
 
 Open the [overview](http://localhost:3300/d/relayna-cell) or [audit dashboard](http://localhost:3300/d/relayna-cell-audit) on the Mac. Lima forwards Grafana's guest port 3000 to **localhost:3300** on macOS, with anonymous Viewer access. Grafana is the only application port forwarded to the Mac; management uses Lima's SSH transport to reach the root-only Unix socket.
 
@@ -224,6 +240,19 @@ limactl shell relayna-cell sudo journalctl -u cell-server -n 100 --no-pager
 ```
 
 To update Cell, check out the intended version and rerun `make install` on the Mac. It stops active Cells and restarts Docker in the dedicated VM; stored audit records and named data volumes remain. Use `make dashboards-up` when only the dashboard definitions need updating.
+
+## Setup troubleshooting
+
+| Symptom | Next step |
+| --- | --- |
+| Linux preflight prints `[FAIL]` | Install or configure the reported prerequisite yourself, then repeat `--check` and full setup with the same choices. |
+| `limactl: command not found` | At a `jobz@lima-relayna-cell` prompt, run `exit` to return to macOS. In a Mac terminal, check that Lima is installed and on `PATH`. |
+| The existing Lima VM is stopped | Run `limactl start relayna-cell` on macOS, then `./scripts/cell health`. |
+| Cell health or Linux verification fails | On Linux, run `sudo journalctl -u cell-server -u relayna-infrastructure -n 100 --no-pager`. For the Lima workflow, run `limactl shell relayna-cell sudo journalctl -u cell-server -n 100 --no-pager` on macOS. |
+| Grafana is unreachable | Use port **3000** on the Linux host or through its SSH tunnel, and **3300** on macOS. Start the VM or installed services before opening it. |
+| The SDK image exists but Linux Cell cannot find it | Build with `sudo docker` or `sudo podman`, matching the rootful engine selected during installation. Rootless engines and Docker Desktop use separate image stores. |
+
+The first setup downloads container images and, when selected, model files. Wait for the final verification result. If setup exits unsuccessfully, inspect the reported error, fix it, and rerun the same installation path; [Linux rerun details](docs/linux-setup.md#reruns-and-lifecycle) explain persistence and gateway changes.
 
 ## Delegate commands from an external agent
 
