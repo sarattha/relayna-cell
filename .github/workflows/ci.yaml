@@ -1,4 +1,4 @@
-name: Go checks
+name: Checks
 on:
   push:
   pull_request:
@@ -17,6 +17,14 @@ jobs:
       - run: make build build-linux
       - run: python3 scripts/build-dashboards.py --check
       - run: python3 scripts/test-linux-setup.py
-      - run: bash -n scripts/setup-linux.sh scripts/network-guard.sh
+      - run: bash -n scripts/setup-linux.sh scripts/network-guard.sh scripts/agents-build.sh scripts/install.sh
       - run: docker compose -f deploy/observability/compose.yaml config --quiet
       - run: docker compose -f deploy/inference/compose.yaml config --quiet
+  agents-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the locked uv environment
+        run: docker build -t relayna-cell/agents-sdk:ci examples/agents-sdk
+      - name: Check SDK startup without network or writable root
+        run: docker run --rm --network none --read-only --user 65532:65532 relayna-cell/agents-sdk:ci

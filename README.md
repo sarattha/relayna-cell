@@ -268,13 +268,23 @@ Run these commands **from the project directory on your Mac**, after `make insta
 
 ```bash
 make inference-up   # start Ollama + inference gateway; download Qwen3 4B Instruct
-make agents-build   # build the pinned Python OpenAI Agents SDK example image
+make agents-build   # build the uv-managed OpenAI Agents SDK example image
 make model-smoke    # exercise both modes with real model-generated code
 ```
 
 The model is approximately 2.5 GB. Inference runs on the VM's CPU in a shared Ollama container outside gVisor, capped at 2 CPUs and 4 GiB memory. Model files persist in a Docker volume. The official Ollama image includes additional runtime libraries, so its image download is larger than the model. No OpenAI API key is needed: the SDK uses its Chat Completions adapter with an explicit local endpoint, and OpenAI tracing and Ollama cloud features are disabled.
 
 The first agent framework is **OpenAI Agents SDK for Python**, pinned to `0.24.0`. Its `shell` function either submits an execution through Cell's API or starts a child process when the entire agent is already inside Cell. The real-model test asks the model to implement `add(a, b)` in `/workspace/add.py`, run a test, and finish. Separate assertions check the generated function with several inputs. A response without an actual tool call fails the test.
+
+The [SDK example](examples/agents-sdk/README.md) is a **uv-managed Python 3.13 project** with `pyproject.toml` and a committed `uv.lock`. For local development on Linux or macOS, [install uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
+
+```bash
+cd examples/agents-sdk
+uv sync --locked
+uv run --locked agent.py --help
+```
+
+This checks the local SDK installation. Use `make model-smoke` from the repository root on macOS for the sandboxed agent test above. Container builds install the locked environment with uv; agents use that preinstalled environment without downloading dependencies at runtime. Building the image does not require uv on the host.
 
 Only `/v1/chat/completions` is exposed by the inference gateway; model-management endpoints are blocked. No inference ports are published to macOS or the LAN. The test discovers the gateway's current private address and grants that exact endpoint to a contained agent. Delegated tool Cells remain offline. A small trusted external SDK runner has access to the local Cell API socket; the sandboxed workload never receives it.
 

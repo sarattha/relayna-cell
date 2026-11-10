@@ -5,7 +5,7 @@ task_bundle=$(mktemp -d)
 trap 'rm -rf "$task_bundle"' EXIT
 mkdir -p "$task_bundle/bin"
 cp bin/linux-arm64/cell bin/linux-arm64/cell-server bin/linux-arm64/cell-init "$task_bundle/bin/"
-cp -R deploy scripts examples "$task_bundle/"
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' -cf - deploy scripts examples | tar -xf - -C "$task_bundle"
 limactl shell relayna-cell sudo bash -c 'if systemctl cat cell-server.service >/dev/null 2>&1; then systemctl stop cell-server.service; fi'
 COPYFILE_DISABLE=1 tar -C "$task_bundle" --no-xattrs -cf - . | limactl shell relayna-cell sudo tar -xf - -C /opt/relayna-cell
 limactl shell relayna-cell sudo bash /opt/relayna-cell/scripts/install-runtime.sh
