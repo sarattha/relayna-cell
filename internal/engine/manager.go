@@ -237,20 +237,70 @@ func (m *Manager) watch(i *instance) {
 	logsDone := make(chan error, 1)
 	budget := &outputBudget{max: 4 << 20}
 	go func() {
-		logsDone <- m.Backend.Logs(i.ctx, i.prepared.ContainerID, m.writer(i, "", "stdout", budget, nil, true), m.writer(i, "", "stderr", budget, nil, true))
+		logsDone <- m.Backend.Logs(i.ctx, i.prepared.ContainerID, m.writer(i.ctx, i, "", "stdout", budget, nil, true), m.writer(i.ctx, i, "", "stderr", budget, nil, true))
 	}()
-	code, err := m.Backend.Wait(i.ctx, i.prepared.ContainerID)
+	type exit struct {
+		code int
+		err  error
+	}
+	waitDone := make(chan exit, 1)
+	go func() {
+		code, err := m.Backend.Wait(i.ctx, i.prepared.ContainerID)
+		waitDone <- exit{code, err}
+	}()
+	var result exit
+	var logErr error
+	waiting := true
+	for waiting {
+		select {
+		case result = <-waitDone:
+			waiting = false
+		case logErr = <-logsDone:
+			logsDone = nil
+			if i.ctx.Err() != nil {
+				continue
+			}
+			if logErr == nil {
+				// A clean EOF can precede the engine's normal exit notification.
+				select {
+				case result = <-waitDone:
+					waiting = false
+					continue
+				case <-i.ctx.Done():
+					continue
+				case <-time.After(250 * time.Millisecond):
+				}
+				ctx, cancel := context.WithTimeout(i.ctx, 3*time.Second)
+				running, err := m.Backend.Running(ctx, i.prepared.ContainerID)
+				cancel()
+				if i.ctx.Err() != nil {
+					continue
+				}
+				if !running && err == nil {
+					continue
+				}
+				logErr = fmt.Errorf("log stream ended while workload was active (running=%v, error=%v)", running, err)
+			}
+			m.Fault(i.prepared.ContainerID, fmt.Errorf("output collection failed: %w", logErr))
+		}
+	}
+	code, err := result.code, result.err
+	if err == nil {
+		err = logErr
+	}
 	if err != nil {
 		m.stop(i)
 	}
-	select {
-	case logErr := <-logsDone:
-		if logErr != nil && err == nil {
-			err = logErr
+	if logsDone != nil {
+		select {
+		case logErr := <-logsDone:
+			if logErr != nil && err == nil {
+				err = logErr
+			}
+		case <-time.After(2 * time.Second):
+			i.cancel()
+			<-logsDone
 		}
-	case <-time.After(2 * time.Second):
-		i.cancel()
-		<-logsDone
 	}
 	m.Proxy.Revoke(i.id)
 	i.cancel()
@@ -331,7 +381,7 @@ func (m *Manager) Delete(id string) error {
 	return m.emit(id, "", "control", "cell.deleted", nil)
 }
 
-func (m *Manager) Exec(ctx context.Context, id string, req cell.ExecRequest, send func(cell.Frame) error, recordOutput bool) error {
+func (m *Manager) Exec(ctx context.Context, id string, req cell.ExecRequest, send func(context.Context, cell.Frame) error, recordOutput bool) error {
 	if err := cell.ValidateCommand(req.Command, false); err != nil {
 		return err
 	}
@@ -365,11 +415,7 @@ func (m *Manager) Exec(ctx context.Context, id string, req cell.ExecRequest, sen
 	stop := context.AfterFunc(i.ctx, cancel)
 	defer stop()
 	budget := &outputBudget{max: 4 << 20}
-	code, err := m.Backend.Exec(runCtx, cid, req.Command, bytes.NewReader(req.Stdin), m.writer(i, execID, "stdout", budget, send, recordOutput), m.writer(i, execID, "stderr", budget, send, recordOutput))
-	if err != nil || runCtx.Err() != nil {
-		if err == nil {
-			err = runCtx.Err()
-		}
+	fail := func(err error) error {
 		m.mu.Lock()
 		i.cell.State = "failed"
 		i.cell.Error = "execution cancelled or output failed: " + err.Error()
@@ -378,10 +424,25 @@ func (m *Manager) Exec(ctx context.Context, id string, req cell.ExecRequest, sen
 		_ = m.emit(id, execID, "control", "execution.failed", map[string]string{"error": err.Error()})
 		return err
 	}
+	code, err := m.Backend.Exec(runCtx, cid, req.Command, bytes.NewReader(req.Stdin), m.writer(runCtx, i, execID, "stdout", budget, send, recordOutput), m.writer(runCtx, i, execID, "stderr", budget, send, recordOutput))
+	if err != nil || runCtx.Err() != nil {
+		if err == nil {
+			err = runCtx.Err()
+		}
+		return fail(err)
+	}
 	if err = m.emit(id, execID, "control", "execution.finished", map[string]int{"exit_code": code}); err != nil {
 		return err
 	}
-	return send(cell.Frame{ExecutionID: execID, Stream: "exit", ExitCode: &code})
+	if err = send(runCtx, cell.Frame{ExecutionID: execID, Stream: "exit", ExitCode: &code}); err != nil {
+		if recordOutput {
+			return fail(err)
+		}
+		// File-transfer callbacks also report ordinary nonzero helper exits.
+		// Those application errors do not mean output delivery was lost.
+		return err
+	}
+	return nil
 }
 
 type outputBudget struct {
@@ -391,7 +452,7 @@ type outputBudget struct {
 type outputWriter struct{ write func([]byte) (int, error) }
 
 func (w outputWriter) Write(p []byte) (int, error) { return w.write(p) }
-func (m *Manager) writer(i *instance, execID, stream string, b *outputBudget, send func(cell.Frame) error, record bool) io.Writer {
+func (m *Manager) writer(ctx context.Context, i *instance, execID, stream string, b *outputBudget, send func(context.Context, cell.Frame) error, record bool) io.Writer {
 	return outputWriter{write: func(p []byte) (int, error) {
 		b.mu.Lock()
 		defer b.mu.Unlock()
@@ -413,7 +474,7 @@ func (m *Manager) writer(i *instance, execID, stream string, b *outputBudget, se
 				}
 			}
 			if send != nil {
-				if err := send(cell.Frame{ExecutionID: execID, Stream: stream, Data: part}); err != nil {
+				if err := send(ctx, cell.Frame{ExecutionID: execID, Stream: stream, Data: part}); err != nil {
 					return 0, err
 				}
 			}

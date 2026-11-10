@@ -2,12 +2,15 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/sarattha/relayna-cell/internal/engine"
 	"github.com/sarattha/relayna-cell/pkg/cell"
@@ -77,14 +80,46 @@ func Handler(m *engine.Manager) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		enc := json.NewEncoder(w)
-		send := func(f cell.Frame) error {
+		controller := http.NewResponseController(w)
+		var streamErr error
+		send := func(ctx context.Context, f cell.Frame) (err error) {
+			if streamErr != nil {
+				return streamErr
+			}
+			defer func() {
+				if err != nil {
+					streamErr = err
+				}
+			}()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			deadline := time.Now().Add(5 * time.Second)
+			if expires, ok := ctx.Deadline(); ok && expires.Before(deadline) {
+				deadline = expires
+			}
+			if err := controller.SetWriteDeadline(deadline); err != nil {
+				return err
+			}
+			// Backend output writes are synchronous. Interrupt the socket write on
+			// execution expiry, Cell cancellation, request cancellation or shutdown.
+			done := make(chan struct{})
+			stop := context.AfterFunc(ctx, func() {
+				_ = controller.SetWriteDeadline(time.Now())
+				close(done)
+			})
+			defer func() {
+				if !stop() {
+					<-done
+				}
+			}()
 			if e := enc.Encode(f); e != nil {
 				return e
 			}
-			return http.NewResponseController(w).Flush()
+			return controller.Flush()
 		}
-		if e := m.Exec(r.Context(), r.PathValue("id"), req, send, true); e != nil {
-			_ = send(cell.Frame{Stream: "error", Error: e.Error()})
+		if e := m.Exec(r.Context(), r.PathValue("id"), req, send, true); e != nil && !errors.Is(e, context.Canceled) && !errors.Is(e, context.DeadlineExceeded) {
+			_ = send(r.Context(), cell.Frame{Stream: "error", Error: e.Error()})
 		}
 	})
 	mux.HandleFunc("PUT /v1alpha1/cells/{id}/files", func(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +135,7 @@ func Handler(m *engine.Manager) http.Handler {
 		}
 		req := cell.ExecRequest{Command: []string{"/cell-init", "write", p}, Stdin: b}
 		var stderr bytes.Buffer
-		e = m.Exec(r.Context(), r.PathValue("id"), req, func(f cell.Frame) error {
+		e = m.Exec(r.Context(), r.PathValue("id"), req, func(_ context.Context, f cell.Frame) error {
 			if f.Stream == "stderr" {
 				stderr.Write(f.Data)
 			}
@@ -122,7 +157,7 @@ func Handler(m *engine.Manager) http.Handler {
 			return
 		}
 		var out, stderr bytes.Buffer
-		e := m.Exec(r.Context(), r.PathValue("id"), cell.ExecRequest{Command: []string{"/cell-init", "read", p}}, func(f cell.Frame) error {
+		e := m.Exec(r.Context(), r.PathValue("id"), cell.ExecRequest{Command: []string{"/cell-init", "read", p}}, func(_ context.Context, f cell.Frame) error {
 			if f.Stream == "stdout" {
 				out.Write(f.Data)
 			}
