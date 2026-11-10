@@ -1,0 +1,7 @@
+{
+  "name": "contained-agent",
+  "mode": "agent",
+  "image": "python:3.13-slim",
+  "command": ["python", "-u", "-c", "import subprocess; print('Agent running inside Cell', flush=True); subprocess.run(['sh', '-c', 'printf tool-result > /workspace/result.txt; cat /workspace/result.txt'], check=True)"],
+  "timeout_seconds": 60
+}

@@ -1,0 +1,10 @@
+{
+  "name": "tool-session",
+  "mode": "session",
+  "image": "python:3.13-slim",
+  "cpu": 1,
+  "memory_mib": 256,
+  "workspace_mib": 64,
+  "pids": 64,
+  "timeout_seconds": 300
+}

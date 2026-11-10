@@ -1,0 +1,12 @@
+{
+  "builder": "docker.io/library/golang:1.26.0",
+  "probe": "docker.io/library/python:3.13-slim",
+  "loki": "docker.io/grafana/loki:3.7.9",
+  "alloy": "docker.io/grafana/alloy:v1.21.3",
+  "grafana": "docker.io/grafana/grafana:13.3.0",
+  "gateway": "docker.io/library/nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311",
+  "ollama": "docker.io/ollama/ollama:0.40.15@sha256:0e59999e0e8f9fd4e704bd788a89b7e4cad399367fb1365f8c102ac662288761",
+  "llama.cpp": "ghcr.io/ggml-org/llama.cpp:server-b10524",
+  "vllm": "docker.io/vllm/vllm-openai:v0.32.0",
+  "sglang": "docker.io/lmsysorg/sglang:v0.5.23"
+}

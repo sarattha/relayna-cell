@@ -1,0 +1,42 @@
+logging {
+  level = "info"
+  format = "json"
+}
+
+loki.source.file "cell" {
+  targets = [{__path__ = "/var/log/relayna-cell/*.ndjson", service_name = "relayna-cell", environment = "local"}]
+  file_match { enabled = true }
+  forward_to = [loki.process.cell.receiver]
+}
+
+loki.process "cell" {
+  // Parse only the trusted outer envelope, never workload-provided JSON.
+  stage.json {
+    expressions = {
+      timestamp = "timestamp",
+      source = "source",
+      cell_id = "cell_id",
+      execution_id = "execution_id",
+      event_id = "event_id",
+      event_kind = "event_kind",
+    }
+  }
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+  stage.labels { values = {source = ""} }
+  stage.structured_metadata {
+    values = {cell_id = "", execution_id = "", event_id = "", event_kind = ""}
+  }
+  stage.label_drop { values = ["filename"] }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+    max_backoff_retries = 0
+    max_backoff_period = "10s"
+  }
+}
